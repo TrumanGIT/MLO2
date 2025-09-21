@@ -33,82 +33,71 @@ namespace logger = SKSE::log;
         logger::info("BGSKeyword LocTypeDragonPriestLair (0x000130E1) not found");
     }
 }
+ // clode a ni node froma  template ahead of time and assign as a value to a array of meshes
+ inline RE::NiPointer<RE::NiNode> cloneNiNode(std::string templatePath) {
 
- inline RE::NiPointer<RE::NiNode> cloneNiNode(
-    std::string templatePath) {  
+     RE::NiPointer<RE::NiNode> loaded;
+     auto args = RE::BSModelDB::DBTraits::ArgsType();
 
-RE::NiPointer<RE::NiNode> loaded;
-        auto args = RE::BSModelDB::DBTraits::ArgsType();
-    
-        auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-       
-        if (result == RE::BSResource::ErrorCode::kNone && loaded) {
+     auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
 
-            if (loaded) {
-                logger::info("Loaded root node type: {}", loaded->GetRTTI()->GetName());
-                logger::info("Loaded root children count: {}", loaded->children.size());
-                if (!loaded->children.empty() && loaded->children[0]) {
-                    auto firstChild = loaded->children[0]->AsNode();
-                    logger::info("First child node type: {}", firstChild->GetRTTI()->GetName());
-                    logger::info("First child children count: {}", firstChild->children.size());
-                }
-            }
+     if (result == RE::BSResource::ErrorCode::kNone && loaded) {
 
-            auto fadeNode = loaded->AsFadeNode();
-            if (fadeNode && fadeNode->children.size() > 0) {
-                auto desiredNode = fadeNode->children[0];
-                if (desiredNode) {
-                    auto tempPrototype = desiredNode->AsNode();
-                    if (tempPrototype) {
-                     
-                        RE::NiCloningProcess cloningProcess{};
-                        auto cloneBase = tempPrototype->CreateClone(cloningProcess);
-                        if (cloneBase) {
-                           auto yourGlowNodePrototype = cloneBase->AsNode();
-                            if (yourGlowNodePrototype) {
-                                return RE::NiPointer<RE::NiNode>(yourGlowNodePrototype);; 
-                                logger::info("Successfully extracted and cloned prototype from NIF!");
-                            }
-                            else {
-                                logger::error("Cloned object is not a NiNode!");
-                                 return nullptr; 
-                            }
-                        }
-                        else {
-                            logger::error("Failed to clone prototype node!");
-                             return nullptr; 
-                        }
-                    }
-                    else {
-                        logger::warn("Desired node was not a NiNode");
-                         return nullptr; 
-                    }
-                }
-                else {
-                    logger::warn("Desired node was null");
-                     return nullptr; 
-                }
-            }
-            else {
-                logger::warn("Fade node is missing or has no children");
-                 return nullptr; 
-            }
-        }
-        else {
-            logger::warn("Failed to load NIF file");
-            return nullptr; 
-        }
-       
-    }
+         logger::info("Loaded root node type: {}", loaded->GetRTTI()->GetName());
+         logger::info("Loaded root children count: {}", loaded->children.size());
 
-inline void assignClonedNodes() {
+         if (!loaded->children.empty() && loaded->children[0]) {
+             auto firstChild = loaded->children[0]->AsNode();
+             logger::info("First child node type: {}", firstChild->GetRTTI()->GetName());
+             logger::info("First child children count: {}", firstChild->children.size());
+         }
+
+         auto fadeNode = loaded->AsNode();
+         if (fadeNode && !fadeNode->children.empty()) {
+
+             RE::NiCloningProcess cloningProcess;
+             auto cloneBase = fadeNode->CreateClone(cloningProcess);
+             fadeNode->ProcessClone(cloningProcess);
+
+             if (cloneBase) {
+                 auto yourGlowNodePrototype = cloneBase->AsNode();
+                 if (yourGlowNodePrototype) {
+                     logger::info("Successfully extracted and cloned prototype from NIF!");
+                     return RE::NiPointer<RE::NiNode>(yourGlowNodePrototype);
+                 }
+                 else {
+                     logger::error("Cloned object is not a NiNode!");
+                     return nullptr;
+                 }
+             }
+             else {
+                 logger::error("Failed to clone prototype node!");
+                 return nullptr;
+             }
+
+         }
+         else {
+             logger::warn("Fade node is missing or has no children");
+             return nullptr;
+         }
+
+     }
+     else {
+         logger::warn("Failed to load NIF file");
+         return nullptr;
+     }
+ }
+
+
+ // sort out what arrays of meshes get what template node.
+/*inline void assignClonedNodes() {
     logger::info("assigning cloned nodes... total groups: {}", baseMeshesAndNiNodeToAttach.size());
 
     std::string prefix = "Meshes\\NEW\\SSE\\";
     int templateFilePathIterator = 0;
 
     for (auto& [meshPaths, nodePtr] : baseMeshesAndNiNodeToAttach) {
-        logger::info("Processing group #{} with {} formIDs", templateFilePathIterator, meshePaths.size());
+      //  logger::info("cloneing nodes for group #{}", templateFilePathIterator);
 
         if (templateFilePathIterator >= templateNames.size()) {
             logger::warn("Ran out of template names for map entries at index {}", templateFilePathIterator);
@@ -126,25 +115,28 @@ inline void assignClonedNodes() {
     }
 
     logger::info("Finished assignClonedNodes");
-}
+}*/
 
-inline void AttachNodeToMesh(RE::NiNode* nodeToAttach) {
-   
-    if (!nodeToAttach) {
-        logger::info("AttachNodeToReference: nodeToAttach is null");
+inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
+    if (!root) {
+        logger::warn("AttachNodeToMesh: root is null");
         return;
     }
 
-    rootNode->AttachChild(nodeToAttach);
-    logger::info("AttachNodeToReference: Node attached successfully");
-}
+    if (!nodeToAttach) {
+        logger::warn("AttachNodeToMesh: nodeToAttach is null");
+        return;
+    }
 
+    root->InsertChildAt(1,nodeToAttach); // append to the mesh's root
+    logger::info("AttachNodeToMesh: inserted child at 1 successfully successfully");
+}
 // this is only if we need to overwrite 6 bits of memory instead of the default 5.... currently not used. ive tried alot of hooks lmao
 
 template <class T, std::size_t size = 5>  
 inline void write_thunk_call(std::uintptr_t a_src) {
     auto& trampoline = SKSE::GetTrampoline();
-    if (size == 6) {
+    if constexpr (size == 6) {
         T::func = *(uintptr_t*)trampoline.write_call<6>(a_src, T::thunk);
     } else {
         T::func = trampoline.write_call<size>(a_src, T::thunk);
@@ -188,8 +180,19 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
 
 // method to swap fire color models
 
+inline void ApplyColorSwitch(RE::TESModel* bm, const std::string& newPath) {
+    if (!bm) return;
+    auto currentModel = bm->GetModel();
+    if (currentModel != newPath) {
+        if (ModelsAndOriginalFilePaths.find(bm) == ModelsAndOriginalFilePaths.end()) {
+            ModelsAndOriginalFilePaths[bm] = currentModel;
+        }
+        bm->SetModel(newPath.c_str());
+    }
+}
+
 inline void ProcessReference(RE::TESObjectREFR* a_ref) {
-    const auto refid = a_ref->GetFormID();
+   // const auto refid = a_ref->GetFormID();
     const auto base = a_ref->GetBaseObject();
 
     if (!base) return;
@@ -240,17 +243,6 @@ inline void ProcessReference(RE::TESObjectREFR* a_ref) {
         }
     }
 
-void ApplyColorSwitch(RE::TESModel* bm, const std::string& newPath) {
-    if (!bm) return;
-    auto currentModel = bm->GetModel();
-    if (currentModel != newPath) {
-        if (ModelsAndOriginalFilePaths.find(bm) == ModelsAndOriginalFilePaths.end()) {
-            ModelsAndOriginalFilePaths[bm] = currentModel;
-        }
-        bm->SetModel(newPath.c_str());
-    }
-}
-
 inline void splitString(const std::string& input, char delimter, std::vector<std::string>& listToSplit) {
     std::stringstream ss(input);
     std::string item;
@@ -279,7 +271,7 @@ inline void IniParser() {
         if (line.empty() || line[0] == ';') continue;
 
         if (line.starts_with("disableShadowCasters=")) {
-            disableShadowCasters = std::stoi(line.substr(std::string("disableShadowCasters=").length()));
+            disableShadowCasters = std::stof(line.substr(std::string("disableShadowCasters=").length()));
             spdlog::info("INI override: disableShadowCasters = {}", disableShadowCasters);
 
         } else if (line.starts_with("disableTorchLights=")) {
@@ -312,3 +304,39 @@ inline void IniParser() {
         }
     }
 }
+
+inline void toLower(std::string& str) { 
+    for (auto& c : str) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+}
+
+
+inline void DumpFullTree(RE::NiAVObject* obj, int depth = 0)
+{
+    if (!obj) return;
+
+    std::string indent(depth * 2, ' ');
+
+    logger::info("{}- {} [{}]", indent, obj->name.c_str(), obj->GetRTTI() ? obj->GetRTTI()->name : "unknown");
+
+    // if geometry, dump alpha + shader via GEOMETRY_RUNTIME_DATA
+    if (auto geom = obj->AsGeometry()) {
+        auto& runtime = geom->GetGeometryRuntimeData();
+        if (runtime.properties[RE::BSGeometry::States::kProperty]) {
+            logger::info("{}  * alphaProperty present", indent);
+        }
+        if (runtime.properties[RE::BSGeometry::States::kEffect]) {
+            logger::info("{}  * shaderProperty present", indent);
+        }
+    }
+
+    // recurse if node
+    if (auto node = obj->AsNode()) {
+        for (auto& child : node->children) {
+            DumpFullTree(child.get(), depth + 1);
+        }
+    }
+}
+
+
