@@ -115,22 +115,6 @@ namespace logger = SKSE::log;
 
     logger::info("Finished assignClonedNodes");
 }*/
-
-inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
-    if (!root) {
-        logger::warn("AttachNodeToMesh: root is null");
-        return;
-    }
-
-    if (!nodeToAttach) {
-        logger::warn("AttachNodeToMesh: nodeToAttach is null");
-        return;
-    }
-
-    root->AttachChild(nodeToAttach); // append to the mesh's root
-    logger::info("AttachNodeToMesh: inserted child node successfully");
-}
-
 // this mod checks for lights to edit by node name. some light nodes are called dummy thanks bethesda
 
 inline std::string matchedKeyword(std::string nodeName) {
