@@ -228,7 +228,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
         }();
 
     RE::NiPointer<RE::NiNode>& node = bank[count];
-    count = (count + 1) % bank.size(); // this could cause infinite loop ? 
+    count = (count + 1) % bank.size(); // this could cause infinite loop ? bc once u attach a node thats used it comes off and goes to new so endless loop fighting game engine ? 
 
   // logger::info("Keyword '{}' used node index = {}", keyword, count);
 
