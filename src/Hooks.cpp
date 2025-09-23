@@ -78,10 +78,9 @@ namespace Hooks {
 
             auto match = matchedKeyword(nodeName); // then check for keywords to cover a large net ie candle, lantern ect
 
-            if (!match.empty()) {
+            if (!match.empty()) {        // we store most used nodes in a bank to prevent cloning from disl during gameplay
 
-                dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should mention,
-                                                      // file paths with this hook are always null except for loose files. thats why we check by node name. 
+                dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should mention                             // file paths with this hook are always null except for loose files. thats why we check by node name. 
                                                       //     
                 if (nodeName != "lantern") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
 
@@ -92,8 +91,6 @@ namespace Hooks {
         }
 
         func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-    }
-
 
 void PostCreate::Install() {
     // Get TESProcessor's vtable
