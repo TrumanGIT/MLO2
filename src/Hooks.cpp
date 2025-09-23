@@ -85,7 +85,7 @@ namespace Hooks {
                 if (nodeName != "lantern") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
 
                     RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                    AttachNodeToMesh(a_root.get(), nodePtr.get());
+                    AttachChild(a_root.get(), nodePtr.get());
                 }
             }
         }
