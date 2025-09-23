@@ -88,7 +88,6 @@ namespace logger = SKSE::log;
      }
  }
 
-
  // sort out what arrays of meshes get what template node. NOTUSED I failed in cloning a clone to use as a template rather then load from disk to save perf. clones came out bugged and shining blue light 
 /*inline void assignClonedNodes() {
     logger::info("assigning cloned nodes... total groups: {}", baseMeshesAndNiNodeToAttach.size());
@@ -117,7 +116,6 @@ namespace logger = SKSE::log;
     logger::info("Finished assignClonedNodes");
 }*/
 
-
 inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
     if (!root) {
         logger::warn("AttachNodeToMesh: root is null");
@@ -144,7 +142,6 @@ inline std::string matchedKeyword(std::string nodeName) {
             break;
         }
     }
-
     return matchedKeyword;
 }
 
