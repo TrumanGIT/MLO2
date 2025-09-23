@@ -194,6 +194,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
     static std::size_t lanternCount = 0;
     static std::size_t dwecCount = 0;
     static std::size_t dwewallsCount = 0;
+    static std::size_t errorCount = 0;
 
     std::size_t& count = [&]() -> std::size_t& {
         if (keyword == "chandeliers") return chandeliersCount;
@@ -205,7 +206,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
         if (keyword == "lantern") return lanternCount;
         if (keyword == "dwec") return dwecCount;
         if (keyword == "dwewalls") return dwewallsCount;
-        return candleCount; // fallback
+        return errorCount; // fallback
         }();
 
     RE::NiPointer<RE::NiNode>& node = bank[count];
