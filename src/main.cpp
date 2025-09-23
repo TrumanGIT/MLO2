@@ -8,9 +8,10 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
 
        logger::info("kdata is loaded attempting to initialise and install");
-                   //  assignClonedNodes();
+                    Initialize();
 
-    dataHasLoaded = 1.0; 
+                    assignClonedNodesToBank();
+                       dataHasLoaded = true; 
     }
 }
 
@@ -32,6 +33,6 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
     Hooks::Install(); 
     IniParser();
       
-    logger::info("{} v{}"sv, Plugin::NAME, Plugin::VERSION.string());
+   // logger::info("{} v{}"sv, Plugin::NAME, Plugin::VERSION.string());
     return true;
 }
