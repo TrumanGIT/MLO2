@@ -8,10 +8,10 @@
 #include <sstream>
 
 namespace logger = SKSE::log;
-
+// lookup forms not even used anymore feature deperecated
  inline void Initialize() {
      logger::info("loading forms");
-    auto dataHandler = RE::TESDataHandler::GetSingleton(); // single instance
+    auto dataHandler = RE::TESDataHandler::GetSingleton(); 
 
     keywordForswornCamp = dataHandler->LookupForm<RE::BGSKeyword>(0x000130EE, "Skyrim.esm");
     if (!keywordForswornCamp) {
@@ -33,7 +33,8 @@ namespace logger = SKSE::log;
         logger::info("BGSKeyword LocTypeDragonPriestLair (0x000130E1) not found");
     }
 }
- // clode a ni node froma  template ahead of time and assign as a value to a array of meshes
+
+ // clones a ninode from a mesh using its file path can pretty much do what you want name the whole tree using dumpnodetree() in fucntions if you need.
  inline RE::NiPointer<RE::NiNode> cloneNiNode(std::string templatePath) {
 
      RE::NiPointer<RE::NiNode> loaded;
@@ -43,14 +44,14 @@ namespace logger = SKSE::log;
 
      if (result == RE::BSResource::ErrorCode::kNone && loaded) {
 
-         logger::info("Loaded root node type: {}", loaded->GetRTTI()->GetName());
-         logger::info("Loaded root children count: {}", loaded->children.size());
+      //   logger::info("Loaded root node type: {}", loaded->GetRTTI()->GetName());
+       //  logger::info("Loaded root children count: {}", loaded->children.size());
 
-         if (!loaded->children.empty() && loaded->children[0]) {
-             auto firstChild = loaded->children[0]->AsNode();
-             logger::info("First child node type: {}", firstChild->GetRTTI()->GetName());
-             logger::info("First child children count: {}", firstChild->children.size());
-         }
+        // if (!loaded->children.empty() && loaded->children[0]) {
+           //  auto firstChild = loaded->children[0]->AsNode();
+             //logger::info("First child node type: {}", firstChild->GetRTTI()->GetName());
+            // logger::info("First child children count: {}", firstChild->children.size());
+        // }
 
          auto fadeNode = loaded->AsNode();
          if (fadeNode && !fadeNode->children.empty()) {
@@ -62,7 +63,7 @@ namespace logger = SKSE::log;
              if (cloneBase) {
                  auto yourGlowNodePrototype = cloneBase->AsNode();
                  if (yourGlowNodePrototype) {
-                     logger::info("Successfully extracted and cloned prototype from NIF!");
+                   //  logger::info("Successfully extracted and cloned prototype from NIF!");
                      return RE::NiPointer<RE::NiNode>(yourGlowNodePrototype);
                  }
                  else {
@@ -83,13 +84,13 @@ namespace logger = SKSE::log;
 
      }
      else {
-         logger::warn("Failed to load NIF file");
+         logger::warn("Failed to load NIF file {}", templatePath);
          return nullptr;
      }
  }
 
 
- // sort out what arrays of meshes get what template node.
+ // sort out what arrays of meshes get what template node. NOTUSED I failed in cloning a clone to use as a template rather then load from disk to save perf. clones came out bugged and shining blue light 
 /*inline void assignClonedNodes() {
     logger::info("assigning cloned nodes... total groups: {}", baseMeshesAndNiNodeToAttach.size());
 
@@ -117,6 +118,7 @@ namespace logger = SKSE::log;
     logger::info("Finished assignClonedNodes");
 }*/
 
+
 inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
     if (!root) {
         logger::warn("AttachNodeToMesh: root is null");
@@ -128,10 +130,115 @@ inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
         return;
     }
 
-    root->InsertChildAt(1,nodeToAttach); // append to the mesh's root
-    logger::info("AttachNodeToMesh: inserted child at 1 successfully successfully");
+    root->AttachChild(nodeToAttach); // append to the mesh's root
+    logger::info("AttachNodeToMesh: inserted child node successfully");
 }
-// this is only if we need to overwrite 6 bits of memory instead of the default 5.... currently not used. ive tried alot of hooks lmao
+
+// this mod checks for lights to edit by node name. some light nodes are called dummy thanks bethesda
+
+inline std::string matchedKeyword(std::string nodeName) {
+    std::string matchedKeyword;
+
+    for (const auto& [keyword, templates] : keywordNodeBank) {
+        if (nodeName.find(keyword) != std::string::npos) {
+            matchedKeyword = keyword;
+            break;
+        }
+    }
+
+    return matchedKeyword;
+}
+// cant help but clone on the fly from disk with these 
+inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root) {
+    auto cancel = nodeName.find("off");
+    if (cancel != std::string::npos) {
+        return true; 
+       // logger::info("found off variant");
+    }
+  
+         auto it = baseMeshesAndTemplateToAttach.find(nodeName);
+    if (it != baseMeshesAndTemplateToAttach.end()) {
+        logger::info("Attaching  node to specific mesh {}", nodeName);
+
+        std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
+        auto nodeClone = cloneNiNode(fullPath);
+        if (!nodeClone) {
+            logger::warn("Failed to clone from template for {}", nodeName);
+            return false;
+        }
+
+        AttachNodeToMesh(a_root.get(), nodeClone.get());
+        return true;
+    }
+
+    return false;
+}
+
+
+// puts nodes into a bank before main menu for common light sources to save on cloneing during gamplay
+inline void assignClonedNodesToBank() {
+    logger::info("Assigning cloned nodes... total groups: {}", keywordNodeBank.size());
+
+    std::string prefix = "Meshes\\MLO\\Templates\\";
+
+    for (auto& [keyword, arrayOfNodes] : keywordNodeBank) {
+        auto templateIt = keywordTemplateMap.find(keyword);
+        if (templateIt != keywordTemplateMap.end()) {
+            std::string templatePath = prefix + templateIt->second;
+            logger::info("Template path for {} is {}", keyword, templatePath);
+
+            if (keyword == "candle") {
+                for (size_t i = 0; i < 75; i++) {  // fill full array
+                    arrayOfNodes[i] = cloneNiNode(templatePath);
+                }
+            }
+            else {
+                for (size_t i = 0; i < 25; i++) {  // fill half array
+                    arrayOfNodes[i] = cloneNiNode(templatePath);
+                }
+            }
+        }
+    }
+    logger::info("Finished assignClonedNodes");
+}
+
+//we clone and store ni nodes in a bank on startup to help with performance (for nodes we can anyway)
+
+inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword) {
+    auto& bank = keywordNodeBank[keyword];
+
+    static std::size_t chandeliersCount = 0;
+    static std::size_t candleCount = 0;
+    static std::size_t fxfirewCount = 0;
+    static std::size_t campfireCount = 0;
+    static std::size_t fireplacewoodCount = 0;
+    static std::size_t torchCount = 0;
+    static std::size_t lanternCount = 0;
+    static std::size_t dwecCount = 0;
+    static std::size_t dwewallsCount = 0;
+
+    std::size_t& count = [&]() -> std::size_t& {
+        if (keyword == "chandeliers") return chandeliersCount;
+        if (keyword == "candle") return candleCount;
+        if (keyword == "fxfirew") return fxfirewCount;
+        if (keyword == "campfire") return campfireCount;
+        if (keyword == "fireplacewood") return fireplacewoodCount;
+        if (keyword == "torch") return torchCount;
+        if (keyword == "lantern") return lanternCount;
+        if (keyword == "dwec") return dwecCount;
+        if (keyword == "dwewalls") return dwewallsCount;
+        return candleCount; // fallback
+        }();
+
+    RE::NiPointer<RE::NiNode>& node = bank[count];
+    count = (count + 1) % bank.size(); // this could cause infinite loop ? 
+
+  // logger::info("Keyword '{}' used node index = {}", keyword, count);
+
+    return node;
+}
+
+// stole this from somewhere Po3 or thiago99 
 
 template <class T, std::size_t size = 5>  
 inline void write_thunk_call(std::uintptr_t a_src) {
@@ -143,7 +250,7 @@ inline void write_thunk_call(std::uintptr_t a_src) {
     }
 }
 
-// makes sure were not disabling dynamically spawned lights for quests like the moondial light in volkihar courtyard in DLC1 
+// checkcs if fake lights should be disabled by checking some user settings. and excluding dynamicform lights
 // or whitelisted lights by checking the plugin name or carryable or shadowcasters lol
 
 inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* ref) 
@@ -152,7 +259,7 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         return false;
     }
 
-    if (!disableShadowCasters &&
+    if (disableShadowCasters != 1 &&
         light->data.flags.any(RE::TES_LIGHT_FLAGS::kOmniShadow,
                               RE::TES_LIGHT_FLAGS::kHemiShadow,
                               RE::TES_LIGHT_FLAGS::kSpotShadow)) 
@@ -160,13 +267,13 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         return false;
     }
 
-    if (!disableTorchLights &&
+    if (disableTorchLights != 1 &&
         light->data.flags.any(RE::TES_LIGHT_FLAGS::kCanCarry)) 
     {
         // disable lights that can be carried (i.e., torches)
         return false;
     }
-
+    
     auto refOriginFile = ref->GetDescriptionOwnerFile();
     for (auto fileName : whitelist) {
         if (fileName == refOriginFile->fileName) {
@@ -178,7 +285,7 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
     return true;
 }
 
-// method to swap fire color models
+// method to swap fire color models not used anymore see below
 
 inline void ApplyColorSwitch(RE::TESModel* bm, const std::string& newPath) {
     if (!bm) return;
@@ -191,6 +298,7 @@ inline void ApplyColorSwitch(RE::TESModel* bm, const std::string& newPath) {
     }
 }
 
+/// this isent used anymore. it was to change colors of fires in certain locations but the feature got deprecated from the mod
 inline void ProcessReference(RE::TESObjectREFR* a_ref) {
    // const auto refid = a_ref->GetFormID();
     const auto base = a_ref->GetBaseObject();
@@ -243,6 +351,7 @@ inline void ProcessReference(RE::TESObjectREFR* a_ref) {
         }
     }
 
+// bad naming this also adds items to whitelist 
 inline void splitString(const std::string& input, char delimter, std::vector<std::string>& listToSplit) {
     std::stringstream ss(input);
     std::string item;
@@ -271,7 +380,7 @@ inline void IniParser() {
         if (line.empty() || line[0] == ';') continue;
 
         if (line.starts_with("disableShadowCasters=")) {
-            disableShadowCasters = std::stof(line.substr(std::string("disableShadowCasters=").length()));
+            disableShadowCasters = std::stoi(line.substr(std::string("disableShadowCasters=").length()));
             spdlog::info("INI override: disableShadowCasters = {}", disableShadowCasters);
 
         } else if (line.starts_with("disableTorchLights=")) {
@@ -311,6 +420,33 @@ inline void toLower(std::string& str) {
     }
 }
 
+inline void dummyHandler(RE::NiNode* root, std::string nodeName)
+{
+    if (!root) return;
+
+   // logger::info("dummy called ");
+
+    if (nodeName.find("dummy") != std::string::npos) {
+      //  logger::info("dummy found! ");
+        for (auto& child : root->children) {
+            if (!child) continue;
+       
+            auto niNodeChild = child->AsNode();
+            if (niNodeChild) {
+                std::string childName = niNodeChild->name.c_str();
+                toLower(childName);
+
+                // If the child name contains "candle", treat it as the effective node
+                if (childName.find("candle") != std::string::npos) {
+                    // Keyword is always "candle" in this case
+                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+                    AttachNodeToMesh(root, nodePtr.get());
+                    return; // only attach once
+                }
+            }
+        }
+    }
+}
 
 inline void DumpFullTree(RE::NiAVObject* obj, int depth = 0)
 {
