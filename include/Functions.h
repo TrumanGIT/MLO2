@@ -8,10 +8,10 @@
 #include <sstream>
 
 namespace logger = SKSE::log;
-// lookup forms not even used anymore feature deperecated
+
  inline void Initialize() {
      logger::info("loading forms");
-    auto dataHandler = RE::TESDataHandler::GetSingleton(); 
+    auto dataHandler = RE::TESDataHandler::GetSingleton(); // single instance
 
     keywordForswornCamp = dataHandler->LookupForm<RE::BGSKeyword>(0x000130EE, "Skyrim.esm");
     if (!keywordForswornCamp) {
@@ -34,7 +34,6 @@ namespace logger = SKSE::log;
     }
 }
 
- // clones a ninode from a mesh using its file path can pretty much do what you want name the whole tree using dumpnodetree() in fucntions if you need.
  inline RE::NiPointer<RE::NiNode> cloneNiNode(std::string templatePath) {
 
      RE::NiPointer<RE::NiNode> loaded;
@@ -148,7 +147,7 @@ inline std::string matchedKeyword(std::string nodeName) {
 
     return matchedKeyword;
 }
-// cant help but clone on the fly from disk with these 
+
 inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root) {
     auto cancel = nodeName.find("off");
     if (cancel != std::string::npos) {
@@ -174,8 +173,6 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
     return false;
 }
 
-
-// puts nodes into a bank before main menu for common light sources to save on cloneing during gamplay
 inline void assignClonedNodesToBank() {
     logger::info("Assigning cloned nodes... total groups: {}", keywordNodeBank.size());
 
@@ -188,12 +185,12 @@ inline void assignClonedNodesToBank() {
             logger::info("Template path for {} is {}", keyword, templatePath);
 
             if (keyword == "candle") {
-                for (size_t i = 0; i < 75; i++) {  // fill full array
+                for (size_t i = 0; i < 75; i++) {  // lots of candles lmao
                     arrayOfNodes[i] = cloneNiNode(templatePath);
                 }
             }
-            else {
-                for (size_t i = 0; i < 25; i++) {  // fill half array
+            else 
+                for (size_t i = 0; i < 25; i++) { 
                     arrayOfNodes[i] = cloneNiNode(templatePath);
                 }
             }
@@ -238,7 +235,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
     return node;
 }
 
-// stole this from somewhere Po3 or thiago99 
+// stole this from somewhere Po3 orz
 
 template <class T, std::size_t size = 5>  
 inline void write_thunk_call(std::uintptr_t a_src) {
