@@ -23,13 +23,13 @@ namespace Hooks {
         static void thunk(RE::TESModelDB::TESProcessor* a_this, const RE::BSModelDB::DBTraits::ArgsType& a_args,
                           const char* a_nifPath, RE::NiPointer<RE::NiNode>& a_root, std::uint32_t& a_typeOut);
 
-        static inline REL::Relocation<decltype(thunk)> func;  // <-- fix is here
+        static inline REL::Relocation<decltype(thunk)> func;  
         static inline std::size_t size{0x1};
 
         static void Install();
     };
 
-void Install();  //  PersonalNote: (im learning stfu lol) no static or inline works because only calling and define it once so fine as is
+void Install();  // no static or inline works because only calling and define it once so fine as is
 
 }
 
