@@ -1,8 +1,10 @@
 #pragma once
 #include <unordered_set>
+#include <unordered_map>
 
-extern float disableShadowCasters;
-extern float disableTorchLights; 
+extern int disableShadowCasters;
+extern int disableTorchLights;
+extern bool dataHasLoaded;
 
 extern std::array<RE::FormID, 4> fireFormIDs; 
 
@@ -14,7 +16,11 @@ extern std::vector<std::string> whitelist;
 
 extern std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 
-extern std::unordered_map<std::string, std::string> baseMeshesAndNiNodeToAttach;
+extern std::unordered_map<std::string, std::string> baseMeshesAndTemplateToAttach;
+
+extern std::unordered_map<std::string, std::string> keywordTemplateMap;
+
+extern std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank;
 
 extern std::unordered_set<std::string> allMeshes; 
 
@@ -32,4 +38,3 @@ extern RE::BGSKeyword* keywordVampireLair;
 extern RE::BGSKeyword* keywordDungeon;
 extern RE::BGSKeyword* keywordDragonPriestLair;
 
-extern int dataHasLoaded;
