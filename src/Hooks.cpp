@@ -32,13 +32,8 @@ namespace Hooks {
 
         if (should_disable_light(light, ref)) return nullptr;
 
-        auto refOriginFile = ref->GetDescriptionOwnerFile();
+       
 
-        if (std::string(refOriginFile->fileName) != "Window Shadows Ultimate.esp") {
-            light->data.color.red = 255;
-            light->data.color.green = 161;
-            light->data.color.blue = 60;
-        }
         return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
     }
   
@@ -73,24 +68,24 @@ namespace Hooks {
 
         std::string nodeName = a_root->name.c_str(); // grab name of ni node usually 1:1 with mesh names thank god. 
         toLower(nodeName);                           //some nodes are called dummy you can see in dummyhandler() how i deal with that. (thx bethesda)
-    //    logger::info("incoming node = {}", nodeName);
+        //    logger::info("incoming node = {}", nodeName);
         if (!cloneAndAttachNodesForSpecificMeshes(nodeName, a_root)) { // look for specific meshes first
 
             auto match = matchedKeyword(nodeName); // then check for keywords to cover a large net ie candle, lantern ect
 
-            if (!match.empty()) {        // we store most used nodes in a bank to prevent cloning from disl during gameplay
-
-                dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should mention                             // file paths with this hook are always null except for loose files. thats why we check by node name. 
-                                                      //     
+            if (!match.empty()) {        // we store most used nodes in a bank to prevent cloning from disl during gameplay                                      // file paths with this hook are always null except for loose files. thats why we check by node name. 
+                //     
                 if (nodeName != "lantern") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
 
                     RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                    AttachChild(a_root.get(), nodePtr.get());
+                   a_root->InsertChildAt(1, nodePtr.get());
                 }
             }
+            dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should m
         }
 
         func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+    }
 
 void PostCreate::Install() {
     // Get TESProcessor's vtable
@@ -101,6 +96,7 @@ void PostCreate::Install() {
 
     logger::info("Installed TESModelDB::TESProcessor hook");
 }
+
     void Install() {
     SKSE::AllocTrampoline(1 << 8);
     TESObjectLIGH_GenDynamic::Install();
