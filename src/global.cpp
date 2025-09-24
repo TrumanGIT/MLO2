@@ -7,6 +7,11 @@
 
 int disableShadowCasters = 1;
 int disableTorchLights = 1;
+
+int red = 255;
+int green = 161; 
+int blue = 60; 
+
 bool dataHasLoaded = false;
 
 std::array<RE::FormID, 4> fireFormIDs = {0x00033DA4, 0x00033DA9, 0x000CD823, 0x000CD824};
