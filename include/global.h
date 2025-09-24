@@ -4,6 +4,11 @@
 
 extern int disableShadowCasters;
 extern int disableTorchLights;
+
+extern int red;
+extern int green; 
+extern int blue; 
+
 extern bool dataHasLoaded;
 
 extern std::array<RE::FormID, 4> fireFormIDs; 
