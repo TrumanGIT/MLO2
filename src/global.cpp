@@ -23,18 +23,19 @@ std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 
 // nodeName (lowercased) -> template mesh path
 std::unordered_map<std::string, std::string> baseMeshesAndTemplateToAttach = {
+
+
     {"mgmagicfirepillarsmall", "College Magic Fire Small_Animated.nif"},
     {"mgmagicfirepillarmidden01", "College Magic Fire_Animated.nif"},
     {"mgmagicfirepillar01", "College Magic Pillar_Animated.nif"},
-
     {"darkelflantern", "Dark Elf Lantern_Animated.nif"},
 
-        {"impcandelabracandle01.nif", "Candle Bra_NOT Animated"},
-    {"impcandelabracandle02.nif", "Candle Bra_NOT Animated"},
-    {"candlehornfloor01", "Candle Bra_NOT Animated"},
+        {"impcandelabracandle01.nif", "Candle Bra_NOT Animated.nif"},
+    {"impcandelabracandle02.nif", "Candle Bra_NOT Animated.nif"},  // order matters these need to load before the keywords
+    {"candlehornfloor01", "Candle Bra_NOT Animated.nif"},
 
     {"dwefloorlanternon", "Dwemer Light_Animated.nif"},
-    {"dwewallsconce01on", "Dwemer Light_Animated.nif"},
+    {"dwewallsconce01on", "Dwemer Light_Animated.nif"},//  these need to load before the keywords left half of their variants to keywords
     {"dwewallsconce02on", "Dwemer Light_Animated.nif"},
     {"dwewallsconcesmall01on", "Dwemer Light_Animated.nif"},
     {"dwewallsconcesmall02on", "Dwemer Light_Animated.nif"},
@@ -42,11 +43,11 @@ std::unordered_map<std::string, std::string> baseMeshesAndTemplateToAttach = {
     {"fxdwegreenflamecalm", "Dwemer Light_Animated.nif"},
 
     {"c06fxfirebluewithembersheavy", "Fires Blue_Animated.nif"},
-    {"fxfirewithembers01_cheap", "Fires Small_Animated.nif"},
+    {"fxfirewithembers01_cheap", "Fires Small_Animated.nif"},//  these need to load before the keywords
     {"fxfirewithembers03", "Fires Small_Animated.nif"},
     {"fxfiresovngarde", "Fires Sovngarde_Animated.nif"},
 
-    {"giantcampfire01burningnoland", "Giant Fires_Animated.nif"},
+    {"giantcampfire01burningnoland", "Giant Fires_Animated.nif"}, //  these need to load before the keywords
 
     {"dlc2castlekarstaagtorch", "Karstaag Ice Fires_Animated.nif"},
     {"tg09nocturnalfxfirepurple", "Nocturnal Purple Fire_Animated.nif"},
@@ -71,10 +72,13 @@ std::unordered_map<std::string, std::string> keywordTemplateMap = {
     {"fxfirew", "Fires_Animated.nif"},
     {"campfire", "Fires_Animated.nif"},
     {"fireplacewood", "Fires_Animated.nif"},
-    {"torch", "Torch Sconce_Animated.nif"},
+    {"firepit","Fires_Animated.nif"},
+        {"torchsconce", "Torch Sconce_Animated.nif"},
+    {"torch", "Hand Held Torch_Animated.nif"},
     {"lantern", "Candles_NOT Animated.nif"},
     {"dwec", "Dwemer Chandelier Sputter_Animated.nif"},
     {"dwewalls", "Dwemer Light Sputter_Animated.nif"},
+   
 };
 
 std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank = {
@@ -82,16 +86,18 @@ std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank
     {"candle", {}},      // "Candles_NOT_Animated.nif"
     {"fxfirew", {}},     // "Fires_Animated.nif"
     {"campfire", {}},    // "Fires_Animated.nif"
-    {"fireplacewood", {}}, // "Fires_Animated.nif"
-    {"torch", {}},       // "Torch Sconce_Animated.nif"
+    {"fireplacewood", {}},
+    {"firepit", {}},// "Fires_Animated.nif"
+        {"torchsconce", {}}, // "Torch Sconce_Animated.nif"    
+    {"torch", {}}, // Hand Held Torch_Animated.nif
     {"lantern", {}},     // "Candles_NOT_Animated.nif"
     {"dwec", {}},        // "Dwemer Chandelier Sputter_Animated.nif"
-    {"dwewalls", {}},     // "Dwemer Light Sputter_Animated.nif"
-    { "dummy", {}}
+    {"dwewalls", {}},   // "Dwemer Light Sputter_Animated.nif"
+    { "dummy", {}},
+   
+     
 };
 
-
-    
 std::string forswornFires = "";
 std::string vampireFires = "";
 std::string dungeonFires = "";
