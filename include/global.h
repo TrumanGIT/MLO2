@@ -5,9 +5,9 @@
 extern int disableShadowCasters;
 extern int disableTorchLights;
 
-extern int red;
-extern int green; 
-extern int blue; 
+extern uint8_t red;
+extern uint8_t green;
+extern uint8_t blue;
 
 extern bool dataHasLoaded;
 
