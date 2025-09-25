@@ -15,7 +15,6 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
     }
 }
 
-
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
     REL::Module::reset();
@@ -27,12 +26,14 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
         return false;
     }
 
+
     SKSE::Init(a_skse);
+    IniParser();
+    ReadMasterListAndFillMap();
     SKSE::AllocTrampoline(1 << 10);
     g_messaging->RegisterListener("SKSE", SKSEMessageHandler);
     Hooks::Install(); 
-    IniParser();
-      
+   
    // logger::info("{} v{}"sv, Plugin::NAME, Plugin::VERSION.string());
     return true;
 }
