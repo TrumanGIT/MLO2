@@ -35,6 +35,7 @@ namespace Hooks {
        
 
         return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
+   
     }
   
 
@@ -68,17 +69,35 @@ namespace Hooks {
 
         std::string nodeName = a_root->name.c_str(); // grab name of ni node usually 1:1 with mesh names thank god. 
         toLower(nodeName);                           //some nodes are called dummy you can see in dummyhandler() how i deal with that. (thx bethesda)
-        //    logger::info("incoming node = {}", nodeName);
+       //     logger::info("incoming node = {}", nodeName);
+        
+
         if (!cloneAndAttachNodesForSpecificMeshes(nodeName, a_root)) { // look for specific meshes first
 
             auto match = matchedKeyword(nodeName); // then check for keywords to cover a large net ie candle, lantern ect
 
             if (!match.empty()) {        // we store most used nodes in a bank to prevent cloning from disl during gameplay                                      // file paths with this hook are always null except for loose files. thats why we check by node name. 
                 //     
-                if (nodeName != "lantern") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
+                if (nodeName != "lantern" && nodeName != "mpstorchembers01") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
 
-                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                   a_root->InsertChildAt(1, nodePtr.get());
+                    if (nodeName == "torch") {
+                        auto torchFire = a_root->children[0]->AsNode(); // cast to NiNode*
+                        if (torchFire) {
+                            auto attachLight = torchFire->children[1]->AsNode(); // cast to NiNode*
+                            if (attachLight) {
+                                RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
+                              //  logger::info("attached light to keyword mesh {}", nodeName);
+                                attachLight->AttachChild(nodePtr.get());
+                            }
+                        }
+                    }
+
+                    else {
+                        RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
+                        a_root->InsertChildAt(1, nodePtr.get());
+                      //  logger::info("attached light to keyword mesh {}", nodeName);
+                     //   DumpFullTree(a_root.get());
+                    }
                 }
             }
             dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should m
