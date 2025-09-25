@@ -6,6 +6,7 @@
 #include <map>
 #include <unordered_set>
 #include <sstream>
+#include <iostream>
 
 namespace logger = SKSE::log;
 
@@ -54,10 +55,12 @@ namespace logger = SKSE::log;
 
          auto fadeNode = loaded->AsNode();
          if (fadeNode && !fadeNode->children.empty()) {
+               auto firstChild = loaded->children[0]->AsNode();
 
+               if (!firstChild || firstChild->children.empty()) return nullptr;
              RE::NiCloningProcess cloningProcess;
-             auto cloneBase = fadeNode->CreateClone(cloningProcess);
-             fadeNode->ProcessClone(cloningProcess);
+             auto cloneBase = firstChild->CreateClone(cloningProcess);
+             //firstChild->ProcessClone(cloningProcess);
 
              if (cloneBase) {
                  auto yourGlowNodePrototype = cloneBase->AsNode();
@@ -118,27 +121,12 @@ namespace logger = SKSE::log;
 }*/
 
 
-inline void AttachNodeToMesh(RE::NiNode* root, RE::NiNode* nodeToAttach) {
-    if (!root) {
-        logger::warn("AttachNodeToMesh: root is null");
-        return;
-    }
-
-    if (!nodeToAttach) {
-        logger::warn("AttachNodeToMesh: nodeToAttach is null");
-        return;
-    }
-
-    root->AttachChild(nodeToAttach); // append to the mesh's root
-   // logger::info("AttachNodeToMesh: inserted child node successfully");
-}
-
 // this mod checks for lights to edit by node name. some light nodes are called dummy thanks bethesda
 
 inline std::string matchedKeyword(std::string nodeName) {
     std::string matchedKeyword;
 
-    for (const auto& [keyword, templates] : keywordNodeBank) {
+    for (const auto& [keyword, templates] : keywordTemplateMap) {
         if (nodeName.find(keyword) != std::string::npos) {
             matchedKeyword = keyword;
             break;
@@ -157,7 +145,7 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
   
          auto it = baseMeshesAndTemplateToAttach.find(nodeName);
     if (it != baseMeshesAndTemplateToAttach.end()) {
-        logger::info("Attaching  node to specific mesh {}", nodeName);
+    
 
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
         auto nodeClone = cloneNiNode(fullPath);
@@ -166,7 +154,9 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
             return false;
         }
 
-        AttachNodeToMesh(a_root.get(), nodeClone.get());
+        a_root->InsertChildAt(1,nodeClone.get());
+      //  logger::warn("attached node to specific mesh {} ", nodeName);
+
         return true;
     }
 
@@ -217,6 +207,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
     static std::size_t dwecCount = 0;
     static std::size_t dwewallsCount = 0;
     static std::size_t firepitCount = 0;
+    static std::size_t errorCount = 0;
     std::size_t& count = [&]() -> std::size_t& {
         if (keyword == "chandeliers") return chandeliersCount;
         if (keyword == "candle") return candleCount;
@@ -229,7 +220,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
         if (keyword == "dwec") return dwecCount;
         if (keyword == "dwewalls") return dwewallsCount;
         if (keyword == "firepit") return firepitCount;
-        return candleCount; // fallback
+        return errorCount; // fallback
         }();
 
     RE::NiPointer<RE::NiNode>& node = bank[count];
@@ -284,9 +275,9 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         }
     }
 
-    light->data.color.red = 255;
-    light->data.color.green = 161;
-    light->data.color.blue = 60;
+    light->data.color.red = red;
+    light->data.color.green = green;
+    light->data.color.blue = blue;
 
     return true;
 }
@@ -409,6 +400,26 @@ inline void IniParser() {
             dragonPriestFires = line.substr(std::string("dragonPriestFires=").length());
             spdlog::info("INI override: dragonPriestFires = {}", dragonPriestFires);
         }
+        else if (line.starts_with("RGB Values=")) {
+            auto values = line.substr(std::string("RGB Values=").length());
+
+            // Find each color
+            auto rPos = values.find("Red:");
+            auto gPos = values.find("Green:");
+            auto bPos = values.find("Blue:");
+
+            if (rPos != std::string::npos) {
+                red = static_cast<std::uint8_t>(std::stoi(values.substr(rPos + 4)));
+            }
+            if (gPos != std::string::npos) {
+                green = static_cast<std::uint8_t>(std::stoi(values.substr(gPos + 6)));
+            }
+            if (bPos != std::string::npos) {
+                blue = static_cast<std::uint8_t>(std::stoi(values.substr(bPos + 5)));
+            }
+
+            spdlog::info("INI override: Bulb RGB values set to R:{} G:{} B:{}", red, green, blue);
+        }
 
         else if (line.starts_with("whitelist=")) {
             std::string prefix = "whitelist=";
@@ -418,6 +429,65 @@ inline void IniParser() {
             splitString(line, ',', whitelist);
         }
     }
+}
+
+inline std::string trim(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t");
+    size_t end = s.find_last_not_of(" \t");
+    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+}
+
+inline void ReadMasterListAndFillMap() {
+    std::string path = "Data\\SKSE\\Plugins\\Master.Ini";
+
+    if (!std::filesystem::exists(path)) {
+        std::cerr << "INI file not found: " << path << std::endl;
+        return;
+    }
+
+    std::ifstream iniFile(path);
+    if (!iniFile.is_open()) {
+        logger::warn("INI file not found or failed to open, using defaults.");
+        return;
+    }
+
+    std::string line;
+    std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
+    int commentCount = 0;
+
+    while (std::getline(iniFile, line)) {
+        line = trim(line);
+
+        if (line.empty()) continue;
+
+        if (line.starts_with(";")) {
+            commentCount++;
+            if (commentCount >= 2) mapPtr = &keywordTemplateMap; // stop reading after second comment block
+            continue;
+        }
+
+        auto pos = line.find('=');
+        if (pos != std::string::npos) {
+            std::string key = trim(line.substr(0, pos));
+            std::string value = trim(line.substr(pos + 1));
+            (*mapPtr)[key] = value; // dereference,  [] > * in operator precedence. (*mapPtr) is evaluated first, giving you the actual map.
+        }
+
+       
+    }
+
+    // After reading the INI
+    logger::info("Base Meshes to Template Map:");
+    for (const auto& [key, value] : baseMeshesAndTemplateToAttach) {
+        //logger::info("  key: {} => value: {}", key, value);
+    }
+
+    logger::info("Keyword Template Map:");
+    for (const auto& [key, value] : keywordTemplateMap) {
+       // logger::info("  key: {} => value: {}", key, value);
+    }
+
+    iniFile.close();
 }
 
 inline void toLower(std::string& str) { 
@@ -430,28 +500,32 @@ inline void dummyHandler(RE::NiNode* root, std::string nodeName)
 {
     if (!root) return;
 
-   // logger::info("dummy called ");
+    // Only operate on nodes whose own name contains "dummy"
+    std::string rootName = root->name.c_str();
+    toLower(rootName);
+    if (rootName.find("dummy") == std::string::npos)
+        return;
 
-    if (nodeName.find("dummy") != std::string::npos) {
-      //  logger::info("dummy found! ");
-        for (auto& child : root->children) {
-            if (!child) continue;
-       
-            auto niNodeChild = child->AsNode();
-            if (niNodeChild) {
-                std::string childName = niNodeChild->name.c_str();
-                toLower(childName);
+    // Search children for a NiNode whose name contains "candle"
+    for (auto& child : root->children) {
+        if (!child) continue;
 
-                // If the child name contains "candle", treat it as the effective node
-                if (childName.find("candle") != std::string::npos) {
-                    // Keyword is always "candle" in this case
-                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-                    AttachNodeToMesh(root, nodePtr.get());
-                    return; // only attach once
-                }
-            }
+        auto niNodeChild = child->AsNode();
+        if (!niNodeChild) continue;
+
+        std::string childName = niNodeChild->name.c_str();
+        toLower(childName);
+
+        if (childName.find("candle") != std::string::npos) {
+            // Attach the node only if such a child exists
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+            root->InsertChildAt(1, nodePtr.get());
+         //   logger::info(" attached light ot dummy node {}", rootName);
+            return; // attach only once
         }
     }
+
+    // No child contained "candle" � do nothing
 }
 
 inline void DumpFullTree(RE::NiAVObject* obj, int depth = 0)
