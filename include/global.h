@@ -9,6 +9,7 @@ extern uint8_t red;
 extern uint8_t green;
 extern uint8_t blue;
 
+
 extern bool dataHasLoaded;
 
 extern std::array<RE::FormID, 4> fireFormIDs; 
@@ -18,6 +19,11 @@ extern std::array<RE::FormID, 3> dungeonOutlierFiresIDs;
 extern std::array<std::string, 26> templateNames;
 
 extern std::vector<std::string> whitelist;
+
+extern std::vector<std::string> exclusionList;
+
+extern std::vector<std::string> exclusionListPartialMatch;;
+
 
 extern std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 
