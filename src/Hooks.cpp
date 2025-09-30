@@ -32,13 +32,20 @@ namespace Hooks {
 
         if (should_disable_light(light, ref)) return nullptr;
 
-       
+        if (light->data.flags.none(RE::TES_LIGHT_FLAGS::kOmniShadow,
+            RE::TES_LIGHT_FLAGS::kHemiShadow,
+            RE::TES_LIGHT_FLAGS::kSpotShadow))
+        {
+            light->data.color.red = red;
+            light->data.color.green = green;
+            light->data.color.blue = blue;
+
+        }
 
         return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
    
     }
   
-
     void TESObjectLIGH_GenDynamic::Install() {
         std::array targets{
             std::make_pair(RELOCATION_ID(17206, 17603), 0x1D3),  // TESObjectLIGH::Clone3D
@@ -63,48 +70,61 @@ namespace Hooks {
         std::uint32_t& a_typeOut)
     {
         if (!dataHasLoaded || !a_root) {
+            logger::info("no root or data hasn't loaded, cancelling hook (intentional)");
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-            logger::info("no root or data hasent loaded cancelling hook(intentional)");
         }
 
-        std::string nodeName = a_root->name.c_str(); // grab name of ni node usually 1:1 with mesh names thank god. 
-        toLower(nodeName);                           //some nodes are called dummy you can see in dummyhandler() how i deal with that. (thx bethesda)
-       //     logger::info("incoming node = {}", nodeName);
-        
+    
 
-        if (!cloneAndAttachNodesForSpecificMeshes(nodeName, a_root)) { // look for specific meshes first
+        std::string nodeName = a_root->name.c_str();  // grab name of ni node (usually 1:1 with mesh names)
+        toLower(nodeName);                            // some nodes are called dummy, see dummyHandler()
 
-            auto match = matchedKeyword(nodeName); // then check for keywords to cover a large net ie candle, lantern ect
+        // Try specific meshes first
+        if (!cloneAndAttachNodesForSpecificMeshes(nodeName, a_root)) {
+            // Then check for keywords to cover broader cases (candle, lantern, etc.)
+            auto match = matchedKeyword(nodeName);
 
-            if (!match.empty()) {        // we store most used nodes in a bank to prevent cloning from disl during gameplay                                      // file paths with this hook are always null except for loose files. thats why we check by node name. 
-                //     
-                if (nodeName != "lantern" && nodeName != "mpstorchembers01") { // nodes with just lantern are a empty lantern so we need to exclude them getting light
+            if (!match.empty()) {
+              
+                for (const auto& exclude : exclusionList) {
+                    if (nodeName == exclude) {
+                      //  logger::info("skipping exclude {}", exclude);
+                        return;  
+                    }
+                }
 
+                for (const auto& exclude : exclusionListPartialMatch) {
+                    if (nodeName.find(exclude) != std::string::npos) {
+                     //   logger::info("skipping exclude {}", exclude);
+                        return;  
+                    }
+                }
+
+                    // Special case: torch
                     if (nodeName == "torch") {
-                        auto torchFire = a_root->children[0]->AsNode(); // cast to NiNode*
+                        auto torchFire = a_root->children[0]->AsNode();
                         if (torchFire) {
-                            auto attachLight = torchFire->children[1]->AsNode(); // cast to NiNode*
-                            if (attachLight) {
-                                RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                              //  logger::info("attached light to keyword mesh {}", nodeName);
-                                attachLight->AttachChild(nodePtr.get());
-                            }
+                            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("torch");
+                            torchFire->AttachChild(nodePtr.get());
                         }
                     }
 
-                    else {
-                        RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                        a_root->InsertChildAt(1, nodePtr.get());
-                      //  logger::info("attached light to keyword mesh {}", nodeName);
-                     //   DumpFullTree(a_root.get());
-                    }
-                }
+                    // Attach keyword-matched node
+                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
+                    a_root->AttachChild(nodePtr.get());
+
+                    //logger::info("attached light to keyword mesh {}", nodeName);
+                    // DumpFullTree(a_root.get());  // optional debug
+                
             }
-            dummyHandler(a_root.get(), nodeName); // then deal with dummy nodes. I should m
+
+             dummyHandler(a_root.get(), nodeName);  // handle dummy nodes if needed
         }
 
+       
         func(a_this, a_args, a_nifPath, a_root, a_typeOut);
     }
+
 
 void PostCreate::Install() {
     // Get TESProcessor's vtable
