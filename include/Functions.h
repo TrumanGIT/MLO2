@@ -137,15 +137,24 @@ inline std::string matchedKeyword(std::string nodeName) {
 }
 
 inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root) {
-    auto cancel = nodeName.find("off");
-    if (cancel != std::string::npos) {
-        return true; 
-       // logger::info("found off variant");
-    }
+  
   
          auto it = baseMeshesAndTemplateToAttach.find(nodeName);
     if (it != baseMeshesAndTemplateToAttach.end()) {
     
+        for (const auto& exclude : exclusionList) {
+            if (nodeName == exclude) {
+             //   logger::info("skipping exclude {}", exclude);
+                return true;
+            }
+        }
+
+        for (const auto& exclude : exclusionListPartialMatch) {
+            if (nodeName.find(exclude)) {
+             //   logger::info("skipping exclude {}", exclude); 
+                return true;
+            }
+        }
 
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
         auto nodeClone = cloneNiNode(fullPath);
@@ -154,8 +163,8 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
             return false;
         }
 
-        a_root->InsertChildAt(1,nodeClone.get());
-      //  logger::warn("attached node to specific mesh {} ", nodeName);
+        a_root->AttachChild(nodeClone.get());
+        //logger::warn("attached node to specific mesh {} ", nodeName);
 
         return true;
     }
@@ -196,7 +205,7 @@ inline void assignClonedNodesToBank() {
 inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword) {
     auto& bank = keywordNodeBank[keyword];
 
-    static std::size_t chandeliersCount = 0;
+    static std::size_t chandelierCount = 0;
     static std::size_t candleCount = 0;
     static std::size_t fxfirewCount = 0;
     static std::size_t campfireCount = 0;
@@ -209,7 +218,7 @@ inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword
     static std::size_t firepitCount = 0;
     static std::size_t errorCount = 0;
     std::size_t& count = [&]() -> std::size_t& {
-        if (keyword == "chandeliers") return chandeliersCount;
+        if (keyword == "chandelier") return chandelierCount;
         if (keyword == "candle") return candleCount;
         if (keyword == "fxfirew") return fxfirewCount;
         if (keyword == "campfire") return campfireCount;
@@ -274,10 +283,6 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
             return false;
         }
     }
-
-    light->data.color.red = red;
-    light->data.color.green = green;
-    light->data.color.blue = blue;
 
     return true;
 }
@@ -364,12 +369,12 @@ inline void splitString(const std::string& input, char delimter, std::vector<std
 
         listToSplit.push_back(item);
 
-        spdlog::info("added {} to whitelist", item);
+        spdlog::info("added {} to {}", item, listToSplit);
     }
 }
 
 inline void IniParser() {
-    std::ifstream iniFile("Data\\SKSE\\Plugins\\MLO2.ini");
+    std::ifstream iniFile("Data\\SKSE\\Plugins\\MLO.ini");
     std::string line;
 
     while (std::getline(iniFile, line)) {
@@ -428,6 +433,8 @@ inline void IniParser() {
 
             splitString(line, ',', whitelist);
         }
+
+
     }
 }
 
@@ -463,6 +470,7 @@ inline void ReadMasterListAndFillMap() {
         if (line.starts_with(";")) {
             commentCount++;
             if (commentCount >= 2) mapPtr = &keywordTemplateMap; // stop reading after second comment block
+            if (commentCount >= 3) break; 
             continue;
         }
 
@@ -473,37 +481,79 @@ inline void ReadMasterListAndFillMap() {
             (*mapPtr)[key] = value; // dereference,  [] > * in operator precedence. (*mapPtr) is evaluated first, giving you the actual map.
         }
 
-       
-    }
-
-    // After reading the INI
-    logger::info("Base Meshes to Template Map:");
-    for (const auto& [key, value] : baseMeshesAndTemplateToAttach) {
-        //logger::info("  key: {} => value: {}", key, value);
-    }
-
-    logger::info("Keyword Template Map:");
-    for (const auto& [key, value] : keywordTemplateMap) {
-       // logger::info("  key: {} => value: {}", key, value);
     }
 
     iniFile.close();
 }
 
-inline void toLower(std::string& str) { 
+
+inline void toLower(std::string& str) {
     for (auto& c : str) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
 }
+
+
+inline void ReadMasterListAndFillExcludes() {
+    std::string path = "Data\\SKSE\\Plugins\\Master.Ini";
+
+    if (!std::filesystem::exists(path)) {
+        logger::warn("INI file not found: {}", path);
+        return;
+    }
+
+    std::ifstream iniFile(path);
+    if (!iniFile.is_open()) {
+        logger::warn("Failed to open INI file: {}", path);
+        return;
+    }
+
+    std::string line;
+    int section = 0; // 0=normal, 1=exact excludes, 2=partial excludes
+
+    while (std::getline(iniFile, line)) {
+        line = trim(line);
+        if (line.empty())
+            continue;
+
+        if (line.starts_with(";")) {
+            // detect section headers
+            if (line.find("Exclude by node name exact match") != std::string::npos) {
+                section = 1;
+            }
+            else if (line.find("Exclude by node name partial match") != std::string::npos) {
+                section = 2;
+            }
+            continue;
+        }
+
+        if (section == 1) {
+            line = trim(line);  // already trimming, good
+            toLower(line);      // lowercase for consistency
+            exclusionList.push_back(line);
+            logger::info("Added exact exclude: '{}'", line);  // wrap in quotes to see trailing whitespace
+        }
+        else if (section == 2) {
+            line = trim(line);
+            toLower(line);
+            exclusionListPartialMatch.push_back(line);
+            logger::info("Added partial exclude: '{}'", line);
+        }
+    }
+
+    iniFile.close();
+}
+
+   
+
 
 inline void dummyHandler(RE::NiNode* root, std::string nodeName)
 {
     if (!root) return;
 
     // Only operate on nodes whose own name contains "dummy"
-    std::string rootName = root->name.c_str();
-    toLower(rootName);
-    if (rootName.find("dummy") == std::string::npos)
+  
+    if (nodeName.find("dummy") == std::string::npos)
         return;
 
     // Search children for a NiNode whose name contains "candle"
@@ -516,16 +566,23 @@ inline void dummyHandler(RE::NiNode* root, std::string nodeName)
         std::string childName = niNodeChild->name.c_str();
         toLower(childName);
 
-        if (childName.find("candle") != std::string::npos) {
-            // Attach the node only if such a child exists
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-            root->InsertChildAt(1, nodePtr.get());
-         //   logger::info(" attached light ot dummy node {}", rootName);
+        if (childName.find("chandelier") != std::string::npos) {
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("chandelier");
+            root->AttachChild(nodePtr.get());
+            // logger::info(" attached light ot dummy node {}", rootName);
             return; // attach only once
         }
+
+        if (childName.find("candle") != std::string::npos) {
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+            root->AttachChild(nodePtr.get());
+           // logger::info(" attached light ot dummy node {}", rootName);
+            return; // attach only once
+        }
+
     }
 
-    // No child contained "candle" � do nothing
+    // No child contained "candle" — do nothing
 }
 
 inline void DumpFullTree(RE::NiAVObject* obj, int depth = 0)
