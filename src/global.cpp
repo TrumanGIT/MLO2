@@ -44,8 +44,8 @@ std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank
     {"campfire", {}},    // "Fires_Animated.nif"
     {"fireplacewood", {}},
     {"firepit", {}},// "Fires_Animated.nif"
-        {"torch", {}}, // Hand Held Torch_Animated.nif
-        {"torchsconce", {}}, // "Torch Sconce_Animated.nif"    
+    {"torch", {}}, // Hand Held Torch_Animated.nif
+    {"torchsconce", {}}, // "Torch Sconce_Animated.nif"    
     {"lantern", {}},     // "Candles_NOT_Animated.nif"
     {"dwewalls", {}},   // "Dwemer Light Sputter_Animated.nif"
 };
