@@ -21,7 +21,9 @@ extern std::vector<std::string> whitelist;
 
 extern std::vector<std::string> exclusionList;
 
-extern std::vector<std::string> exclusionListPartialMatch;;
+extern std::vector<std::string> specialNodes;
+
+extern std::vector<std::string> exclusionListPartialMatch;
 
 extern std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 
@@ -46,4 +48,3 @@ extern RE::BGSKeyword* keywordForswornCamp;
 extern RE::BGSKeyword* keywordVampireLair;
 extern RE::BGSKeyword* keywordDungeon;
 extern RE::BGSKeyword* keywordDragonPriestLair;
-
