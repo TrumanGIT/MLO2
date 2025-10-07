@@ -29,6 +29,14 @@ std::vector<std::string> exclusionList;
 
 std::vector<std::string> exclusionListPartialMatch;
 
+std::vector<std::string> specialNodes = {
+           "norcathallsm",
+           "nortmphallbgcolumn03",
+           "nortmphallbgcolumn01",
+           "nortmphallbgcolumnsm02",
+           "nortmphallbgcolumnsm01"
+            };
+
 std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 
 // nodeName (lowercased) -> template mesh path
@@ -36,19 +44,7 @@ std::unordered_map<std::string, std::string> baseMeshesAndTemplateToAttach = {};
 
 std::unordered_map<std::string, std::string> keywordTemplateMap = {};
 
-std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank = {
-    {"dwec", {}},        // "Dwemer Chandelier Sputter_Animated.nif"
-    {"chandelier", {}}, // "Chandeliers_NOT_Animated.nif"
-    {"candle", {}},      // "Candles_NOT_Animated.nif"
-    {"fxfirew", {}},     // "Fires_Animated.nif"
-    {"campfire", {}},    // "Fires_Animated.nif"
-    {"fireplacewood", {}},
-    {"firepit", {}},// "Fires_Animated.nif"
-    {"torch", {}}, // Hand Held Torch_Animated.nif
-    {"torchsconce", {}}, // "Torch Sconce_Animated.nif"    
-    {"lantern", {}},     // "Candles_NOT_Animated.nif"
-    {"dwewalls", {}},   // "Dwemer Light Sputter_Animated.nif"
-};
+std::map<std::string, std::array<RE::NiPointer<RE::NiNode>, 75>> keywordNodeBank = {};
 
 std::string forswornFires = "";
 std::string vampireFires = "";
@@ -61,5 +57,3 @@ RE::BGSKeyword* keywordForswornCamp = nullptr;
 RE::BGSKeyword* keywordVampireLair = nullptr;
 RE::BGSKeyword* keywordDungeon = nullptr;
 RE::BGSKeyword* keywordDragonPriestLair = nullptr;
-
- 
