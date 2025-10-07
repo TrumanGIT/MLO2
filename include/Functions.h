@@ -16,6 +16,222 @@ inline void toLower(std::string& str) {
     }
 }
 
+inline std::string trim(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t");
+    size_t end = s.find_last_not_of(" \t");
+    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+}
+
+inline void splitString(const std::string& input, char delimter, std::vector<std::string>& listToSplit) {
+    std::stringstream ss(input);
+    std::string item;
+
+    while (std::getline(ss, item, delimter)) {
+        while (!item.empty() && std::isspace(item.front())) {
+            item.erase(item.begin());  // begin() =  (position)  front() = (value) erase takes a pos
+        }
+
+        while (!item.empty() && std::isspace(item.back())) {
+            item.pop_back();
+        }
+
+        listToSplit.push_back(item);
+
+        spdlog::info("added {} to whitelist", item);
+    }
+}
+
+inline void IniParser() {
+    std::ifstream iniFile("Data\\SKSE\\Plugins\\MLO.ini");
+    std::string line;
+
+    while (std::getline(iniFile, line)) {
+        line.erase(0, line.find_first_not_of(" \t"));
+        if (line.empty() || line[0] == ';') continue;
+
+        if (line.starts_with("disableShadowCasters=")) {
+            std::string value = line.substr(std::string("disableShadowCasters=").length());
+            toLower(value);
+
+            if (value == "true" || value == "1")
+                disableShadowCasters = 1;
+            else if (value == "false" || value == "0")
+                disableShadowCasters = 0;
+            else
+                spdlog::warn("Invalid value for disableShadowCasters: {}", value);
+
+            spdlog::info("INI override: disableShadowCasters = {}", disableShadowCasters);
+
+        }
+        else if (line.starts_with("disableTorchLights=")) {
+            std::string value = line.substr(std::string("disableTorchLights=").length());
+            toLower(value);
+
+            if (value == "true" || value == "1")
+                disableTorchLights = 1;
+            else if (value == "false" || value == "0")
+                disableTorchLights = 0;
+            else
+                spdlog::warn("Invalid value for disableTorchLights: {}", value);
+
+            spdlog::info("INI override: disableTorchLights = {}", disableTorchLights);
+        } /*else if (line.starts_with("forswornFires=")) {
+            forswornFires = line.substr(std::string("forswornFires=").length());
+            spdlog::info("INI override: forswornFires = {}", forswornFires);
+
+        } else if (line.starts_with("vampireFires=")) {
+            vampireFires = line.substr(std::string("vampireFires=").length());
+            spdlog::info("INI override: vampireFires = {}", vampireFires);
+
+        } else if (line.starts_with("dungeonFires=")) {
+            dungeonFires = line.substr(std::string("dungeonFires=").length());
+            spdlog::info("INI override: dungeonFires = {}", dungeonFires);
+
+        } else if (line.starts_with("dragonPriestFires=")) {
+            dragonPriestFires = line.substr(std::string("dragonPriestFires=").length());
+            spdlog::info("INI override: dragonPriestFires = {}", dragonPriestFires);
+        }*/
+        else if (line.starts_with("RGB Values=")) {
+            auto values = line.substr(std::string("RGB Values=").length());
+
+            // Find each color
+            auto rPos = values.find("Red:");
+            auto gPos = values.find("Green:");
+            auto bPos = values.find("Blue:");
+
+            if (rPos != std::string::npos) {
+                red = static_cast<std::uint8_t>(std::stoi(values.substr(rPos + 4)));
+            }
+            if (gPos != std::string::npos) {
+                green = static_cast<std::uint8_t>(std::stoi(values.substr(gPos + 6)));
+            }
+            if (bPos != std::string::npos) {
+                blue = static_cast<std::uint8_t>(std::stoi(values.substr(bPos + 5)));
+            }
+
+            spdlog::info("INI override: Bulb RGB values set to R:{} G:{} B:{}", red, green, blue);
+        }
+
+        else if (line.starts_with("whitelist=")) {
+            std::string prefix = "whitelist=";
+
+            line.erase(0, prefix.length());
+
+            splitString(line, ',', whitelist);
+        }
+
+
+    }
+}
+
+inline void ReadMasterListAndFillMaps() {
+    std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
+
+    if (!std::filesystem::exists(path)) {
+        std::cerr << "INI file not found: " << path << std::endl;
+        return;
+    }
+
+    std::ifstream iniFile(path);
+    if (!iniFile.is_open()) {
+        logger::warn("INI file not found or failed to open, using defaults.");
+        return;
+    }
+
+    std::string line;
+    std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
+    bool readingSpecificMeshes = true;
+
+    while (std::getline(iniFile, line)) {
+        line = trim(line);
+        if (line.empty()) continue;
+
+        if (line.starts_with(";")) {
+            if (line.find("PARTIAL SEARCH MATCHES") != std::string::npos) {
+                mapPtr = &keywordTemplateMap;
+                readingSpecificMeshes = false;
+            } else if (line.find("EXCLUDE SPECIFIC MESHES") != std::string::npos) {
+                break;
+            }
+            continue;
+        }
+
+        auto pos = line.find('=');
+        if (pos != std::string::npos) {
+            std::string key = trim(line.substr(0, pos));
+            std::string value = trim(line.substr(pos + 1));
+            (*mapPtr)[key] = value;
+
+            
+            if (!readingSpecificMeshes) {
+                keywordNodeBank[key] = {}; /// Initialize the bank dynamically 
+            }
+
+            if (readingSpecificMeshes)
+                logger::info("Specific mesh and its template: {} = {}", key, value);
+            else
+                logger::info("Partial search and its template: {} = {}", key, value);
+        }
+    }
+
+    for (const auto& [key, value] : keywordNodeBank){
+        logger::info(" NodeBank Setup for partial search {}", key);
+    }
+
+    iniFile.close();
+}
+
+
+inline void ReadMasterListAndFillExcludes() {
+    std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
+
+    if (!std::filesystem::exists(path)) {
+        logger::warn("INI file not found: {}", path);
+        return;
+    }
+
+    std::ifstream iniFile(path);
+    if (!iniFile.is_open()) {
+        logger::warn("Failed to open INI file: {}", path);
+        return;
+    }
+
+    std::string line;
+    int section = 0; // 0=normal, 1=exact excludes, 2=partial excludes
+
+    while (std::getline(iniFile, line)) {
+        line = trim(line);
+        if (line.empty())
+            continue;
+
+        if (line.starts_with(";")) {
+            // detect section headers
+            if (line.find("EXCLUDE SPECIFIC MESHES") != std::string::npos) {
+                section = 1;
+            }
+            else if (line.find("PARTIAL SEARCH EXCLUDES") != std::string::npos) {
+                section = 2;
+            }
+            continue;
+        }
+
+        if (section == 1) {
+            line = trim(line);  // already trimming, good
+            toLower(line);      // lowercase for consistency
+            exclusionList.push_back(line);
+            logger::info("Added exact exclude: '{}'", line);  // wrap in quotes to see trailing whitespace
+        }
+        else if (section == 2) {
+            line = trim(line);
+            toLower(line);
+            exclusionListPartialMatch.push_back(line);
+            logger::info("Added partial exclude: '{}'", line);
+        }
+    }
+
+    iniFile.close();
+}
+
  inline void Initialize() {
      logger::info("loading forms");
     auto dataHandler = RE::TESDataHandler::GetSingleton(); // single instance
@@ -129,6 +345,23 @@ inline void toLower(std::string& str) {
 
 // this mod checks for lights to edit by node name. some light nodes are called dummy thanks bethesda
 
+inline bool isExclude(const std::string& nodeName) { 
+    for (const auto& exclude : exclusionList) {
+                if (nodeName == exclude) {
+                    // logger::info("skipping exclude {}", exclude);
+                    return true;
+                }
+            }
+
+            // Exclude partial matches
+            for (const auto& exclude : exclusionListPartialMatch) {
+                if (nodeName.find(exclude) != std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+}
+
 inline std::string matchedKeyword(std::string nodeName) {
     std::string matchedKeyword;
 
@@ -146,10 +379,6 @@ inline std::string matchedKeyword(std::string nodeName) {
 
 inline RE::NiPointer<RE::NiNode>& getNextNodeFromBank(const std::string& keyword) {
     auto& bank = keywordNodeBank[keyword];
-
-    if (bank.empty()) {
-        return nullptr;
-    }
 
     static std::size_t chandelierCount = 0;
     static std::size_t candleCount = 0;
@@ -192,18 +421,7 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
          auto it = baseMeshesAndTemplateToAttach.find(nodeName);
     if (it != baseMeshesAndTemplateToAttach.end()) {
     
-        for (const auto& exclude : exclusionList) {
-            if (nodeName == exclude) {
-             //   logger::info("skipping exclude {}", exclude);
-                return true;
-            }
-        }
-
-        for (const auto& exclude : exclusionListPartialMatch) {
-            if (nodeName.find(exclude) != std::string::npos) { // must compare to npos!
-                return true;
-            }
-        }
+  if (isExclude(nodeName)) return true; 
 
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
 
@@ -222,46 +440,13 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
     return false;
 }
 
-inline bool cloneAndAttachNodesForPartialMeshes(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root) {
 
 
-    auto it = keywordTemplateMap.find(nodeName);
-    if (it != keywordTemplateMap.end()) {
-
-        for (const auto& exclude : exclusionList) {
-            if (nodeName == exclude) {
-                //   logger::info("skipping exclude {}", exclude);
-                return true;
-            }
-        }
-
-        for (const auto& exclude : exclusionListPartialMatch) {
-            if (nodeName.find(exclude) != std::string::npos) { // must compare to npos!
-                return true;
-            }
-        }
-
-        std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
-
-        auto nodeClone = cloneNiNode(fullPath);
-        if (!nodeClone) {
-            logger::warn("Failed to clone from template for {}", nodeName);
-            return false;
-        }
-
-        a_root->AttachChild(nodeClone.get());
-        //logger::warn("attached node to specific mesh {} ", nodeName);
-
-        return true;
-    }
-
-    return false;
-}
 // on startup make a bunch of cloned nodes so we dont have to clone during gameplay
 inline void assignClonedNodesToBank() {
     logger::info("Assigning cloned nodes... total groups: {}", keywordNodeBank.size());
 
-    std::string prefix = "Meshes\\MLO\\Templates\\";
+    std::string prefix = "Meshes\\MLO\\Templates\\";   
 
     for (auto& [keyword, arrayOfNodes] : keywordNodeBank) {
         auto templateIt = keywordTemplateMap.find(keyword);
@@ -306,13 +491,19 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         return false;
     }
 
-    if (disableShadowCasters != 1 &&
+    if (disableShadowCasters == 0 &&
         light->data.flags.any(RE::TES_LIGHT_FLAGS::kOmniShadow,
                               RE::TES_LIGHT_FLAGS::kHemiShadow,
                               RE::TES_LIGHT_FLAGS::kSpotShadow)) 
     {
         return false;
     }
+
+    if (disableTorchLights == 0 &&
+            light->data.flags.any(RE::TES_LIGHT_FLAGS::kCanCarry))
+        {
+            return false;
+        }
     
     auto refOriginFile = ref->GetDescriptionOwnerFile();
     std::string modName = refOriginFile->fileName; 
@@ -325,7 +516,6 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
 
     return true;
 }
-
 // method to swap fire color models not used anymore see below
 
 /*inline void ApplyColorSwitch(RE::TESModel* bm, const std::string& newPath) {
@@ -393,218 +583,73 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
     } */
 
 // this also adds items to whitelist 
-inline void splitString(const std::string& input, char delimter, std::vector<std::string>& listToSplit) {
-    std::stringstream ss(input);
-    std::string item;
-
-    while (std::getline(ss, item, delimter)) {
-        while (!item.empty() && std::isspace(item.front())) {
-            item.erase(item.begin());  // begin() =  (position)  front() = (value) erase takes a pos
-        }
-
-        while (!item.empty() && std::isspace(item.back())) {
-            item.pop_back();
-        }
-
-        listToSplit.push_back(item);
-
-        spdlog::info("added {} to whitelist", item);
-    }
-}
-
-inline void IniParser() {
-    std::ifstream iniFile("Data\\SKSE\\Plugins\\MLO.ini");
-    std::string line;
-
-    while (std::getline(iniFile, line)) {
-        line.erase(0, line.find_first_not_of(" \t"));
-        if (line.empty() || line[0] == ';') continue;
-
-        if (line.starts_with("disableShadowCasters=")) {
-            std::string value = line.substr(std::string("disableShadowCasters=").length());
-            toLower(value);
-
-            if (value == "true" || value == "1")
-                disableShadowCasters = 1;
-            else if (value == "false" || value == "0")
-                disableShadowCasters = 0;
-            else
-                spdlog::warn("Invalid value for disableShadowCasters: {}", value);
-
-            spdlog::info("INI override: disableShadowCasters = {}", disableShadowCasters);
-
-        }
-        else if (line.starts_with("disableTorchLights=")) {
-            std::string value = line.substr(std::string("disableTorchLights=").length());
-            toLower(value);
-
-            if (value == "true" || value == "1")
-                disableTorchLights = 1;
-            else if (value == "false" || value == "0")
-                disableTorchLights = 0;
-            else
-                spdlog::warn("Invalid value for disableTorchLights: {}", value);
-
-            spdlog::info("INI override: disableTorchLights = {}", disableTorchLights);
-        } /*else if (line.starts_with("forswornFires=")) {
-            forswornFires = line.substr(std::string("forswornFires=").length());
-            spdlog::info("INI override: forswornFires = {}", forswornFires);
-
-        } else if (line.starts_with("vampireFires=")) {
-            vampireFires = line.substr(std::string("vampireFires=").length());
-            spdlog::info("INI override: vampireFires = {}", vampireFires);
-
-        } else if (line.starts_with("dungeonFires=")) {
-            dungeonFires = line.substr(std::string("dungeonFires=").length());
-            spdlog::info("INI override: dungeonFires = {}", dungeonFires);
-
-        } else if (line.starts_with("dragonPriestFires=")) {
-            dragonPriestFires = line.substr(std::string("dragonPriestFires=").length());
-            spdlog::info("INI override: dragonPriestFires = {}", dragonPriestFires);
-        }*/
-        else if (line.starts_with("RGB Values=")) {
-            auto values = line.substr(std::string("RGB Values=").length());
-
-            // Find each color
-            auto rPos = values.find("Red:");
-            auto gPos = values.find("Green:");
-            auto bPos = values.find("Blue:");
-
-            if (rPos != std::string::npos) {
-                red = static_cast<std::uint8_t>(std::stoi(values.substr(rPos + 4)));
-            }
-            if (gPos != std::string::npos) {
-                green = static_cast<std::uint8_t>(std::stoi(values.substr(gPos + 6)));
-            }
-            if (bPos != std::string::npos) {
-                blue = static_cast<std::uint8_t>(std::stoi(values.substr(bPos + 5)));
-            }
-
-            spdlog::info("INI override: Bulb RGB values set to R:{} G:{} B:{}", red, green, blue);
-        }
-
-        else if (line.starts_with("whitelist=")) {
-            std::string prefix = "whitelist=";
-
-            line.erase(0, prefix.length());
-
-            splitString(line, ',', whitelist);
-        }
 
 
-    }
-}
+inline bool TorchHandler(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root)
+{
+    if (nodeName == "torch") {
+        RE::NiNode* attachLight = nullptr;
+        RE::NiNode* torchFire = nullptr;
 
-inline std::string trim(const std::string& s) {
-    size_t start = s.find_first_not_of(" \t");
-    size_t end = s.find_last_not_of(" \t");
-    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
-}
-
-inline void ReadMasterListAndFillMap() {
-    std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
-
-    if (!std::filesystem::exists(path)) {
-        std::cerr << "INI file not found: " << path << std::endl;
-        return;
-    }
-
-    std::ifstream iniFile(path);
-    if (!iniFile.is_open()) {
-        logger::warn("INI file not found or failed to open, using defaults.");
-        return;
-    }
-
-    std::string line;
-    std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
-    bool readingSpecificMeshes = true;
-
-    while (std::getline(iniFile, line)) {
-        
-        line = trim(line);
-
-        if (line.empty()) continue;
-
-        if (line.starts_with(";")) {
-            // detect section headers
-            if (line.find("PARTIAL SEARCH MATCHES") != std::string::npos) {
-                mapPtr = &keywordTemplateMap;
-                readingSpecificMeshes = false;
-                
-            }
-            else if (line.find("EXCLUDE SPECIFIC MESHES") != std::string::npos) {
+        // Find TorchFire node
+        for (auto& child : a_root->children) {
+            if (auto childNode = child->AsNode(); childNode && childNode->name == "TorchFire") {
+                torchFire = childNode;
                 break;
             }
-            continue;
         }
 
-        auto pos = line.find('=');
-        if (pos != std::string::npos) {
-            std::string key = trim(line.substr(0, pos));
-            std::string value = trim(line.substr(pos + 1));
-            (*mapPtr)[key] = value; // dereference,  [] > * in operator precedence. (*mapPtr) is evaluated first, giving you the actual map.
-            
-            if (readingSpecificMeshes)
-                logger::info("Specific mesh and its template: {} = {}", key, value);
-            else
-                logger::info("Partial search and its template: {} = {}", key, value);
+        if (torchFire) {
+            // Find AttachLight node inside TorchFire
+            for (auto& child : torchFire->children) {
+                if (auto childNode = child->AsNode(); childNode && childNode->name == "AttachLight") {
+                    attachLight = childNode;
+                    break;
+                }
+            }
         }
 
+        if (attachLight) {
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("torch");
+            attachLight->AttachChild(nodePtr.get());
+            // logger::info("attached light to torch at specific spot {}", nodeName);
+            return true; // handled
+        } else {
+            logger::warn("hand held torch light placement failed for {}", nodeName);
+        }
     }
 
-    iniFile.close();
+    return false;
 }
 
-inline void ReadMasterListAndFillExcludes() {
-    std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
+inline bool candlesFusedInWallMeshesHandler(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root)
+{
+    bool handled = false;
 
-    if (!std::filesystem::exists(path)) {
-        logger::warn("INI file not found: {}", path);
-        return;
-    }
+    for (const auto& special : specialNodes) {
+        if (nodeName.find(special) != std::string::npos) {
 
-    std::ifstream iniFile(path);
-    if (!iniFile.is_open()) {
-        logger::warn("Failed to open INI file: {}", path);
-        return;
-    }
-
-    std::string line;
-    int section = 0; // 0=normal, 1=exact excludes, 2=partial excludes
-
-    while (std::getline(iniFile, line)) {
-        line = trim(line);
-        if (line.empty())
-            continue;
-
-        if (line.starts_with(";")) {
-            // detect section headers
-            if (line.find("EXCLUDE SPECIFIC MESHES") != std::string::npos) {
-                section = 1;
+            // Loop through all children to find Glow nodes
+            for (auto& child : a_root->children) {
+                if (auto childAsNode = child->AsNode(); childAsNode) {
+                    std::string childName = childAsNode->name.c_str();
+                    if (childName.find("Glow") != std::string::npos) {
+                        RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+                        childAsNode->AttachChild(nodePtr.get());
+                        handled = true;
+                        // logger::info("Attached candle node to {}", childName);
+                    }
+                }
             }
-            else if (line.find("PARTIAL SEARCH EXCLUDES") != std::string::npos) {
-                section = 2;
-            }
-            continue;
-        }
 
-        if (section == 1) {
-            line = trim(line);  // already trimming, good
-            toLower(line);      // lowercase for consistency
-            exclusionList.push_back(line);
-            logger::info("Added exact exclude: '{}'", line);  // wrap in quotes to see trailing whitespace
-        }
-        else if (section == 2) {
-            line = trim(line);
-            toLower(line);
-            exclusionListPartialMatch.push_back(line);
-            logger::info("Added partial exclude: '{}'", line);
+            //if (!handled) {
+              //  logger::warn("Candles fused in wall mesh, but no Glow node found for {}", nodeName);
+            //}
         }
     }
 
-    iniFile.close();
+    return handled;
 }
-
 
 inline void dummyHandler(RE::NiNode* root, std::string nodeName)
 {
@@ -625,17 +670,15 @@ inline void dummyHandler(RE::NiNode* root, std::string nodeName)
         std::string childName = niNodeChild->name.c_str();
         toLower(childName);
 
-        if (childName.find("chandelier") != std::string::npos) {
+        if (childName.find("chandel") != std::string::npos) { // skyrim spells chandelier wrong sometimes (for example sometimes chandelier has 2 'L's in its name, thanks bethesda)
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("chandelier");
             root->AttachChild(nodePtr.get());
-            
-            return; // attach only once
+            return; 
         }
 
         if (childName.find("candle") != std::string::npos) {
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
             root->AttachChild(nodePtr.get());
-    
             return;
         }
 
