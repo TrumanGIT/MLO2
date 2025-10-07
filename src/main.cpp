@@ -29,7 +29,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 
     SKSE::Init(a_skse);
     IniParser();
-    ReadMasterListAndFillMap();
+    ReadMasterListAndFillMaps();
     ReadMasterListAndFillExcludes();
     SKSE::AllocTrampoline(1 << 10);
     g_messaging->RegisterListener("SKSE", SKSEMessageHandler);
