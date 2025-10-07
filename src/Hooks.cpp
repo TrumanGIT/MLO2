@@ -6,9 +6,6 @@
 #include <string>
 #include <unordered_set>
 
-// ADD                             = Candles_NOT Animated.nif to keywords
-// ADD                  = Fires Blue_Animated.nif to specific
-//add candlestick to excludes
 
 namespace Hooks {
 
@@ -48,13 +45,6 @@ namespace Hooks {
 
         }
 
-        if (disableTorchLights == 1 &&
-            light->data.flags.any(RE::TES_LIGHT_FLAGS::kCanCarry))
-        {
-            // disable lights that can be carried (i.e., torches)
-            return nullptr;
-        }
-
         return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
    
     }
@@ -83,11 +73,11 @@ namespace Hooks {
     std::uint32_t& a_typeOut)
 {
     if (!dataHasLoaded || !a_root) {
-       // logger::info("no root or data hasn't loaded, cancelling hook (intentional)");
+        // logger::info("no root or data hasn't loaded, cancelling hook (intentional)");
         return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
     }
 
-    std::string nodeName = a_root->name.c_str();  // grab name of ni node (usually 1:1 with mesh names)
+    std::string nodeName = a_root->name.c_str();  // grab name of NiNode (usually 1:1 with mesh names)
     toLower(nodeName);                            // normalize case
 
     // Try specific meshes first
@@ -96,104 +86,33 @@ namespace Hooks {
         auto match = matchedKeyword(nodeName);
 
         if (!match.empty()) {
+            // Exclude exact matches
+           if (isExclude(nodeName))
+                return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            for (const auto& exclude : exclusionList) {
-                if (nodeName == exclude) {
-                    //   logger::info("skipping exclude {}", exclude);
-                    return func(a_this, a_args, a_nifPath, a_root, a_typeOut);;
-                }
-            }
+            // Handheld torches need special node placement so the light shuts off when extinguished
+            if (TorchHandler(nodeName, a_root))
+                return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            for (const auto& exclude : exclusionListPartialMatch) {
-                if (nodeName.find(exclude) != std::string::npos) { // must compare to npos!
-                    return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-                }
-            }
+            // Some Nordic ruin meshes have candles embedded in walls that need special placement
+            if (candlesFusedInWallMeshesHandler(nodeName, a_root))
+                return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            static const std::vector<std::string> specialNodes = {
-           "norcathallsm",
-           "nortmphallbgcolumn03",
-           "nortmphallbgcolumn01",
-           "nortmphallbgcolumnsm02",
-           "nortmphallbgcolumnsm01"
-            };
-
-            for (const auto& special : specialNodes) {
-                if (nodeName.find(special) != std::string::npos) {
-                    for (auto& child : a_root->children) {
-                        if (child) {
-                            auto childAsNode = child->AsNode();
-                            if (childAsNode) {
-                                std::string childName = child->name.c_str();
-                                if (childName.find("Glow") != std::string::npos) {
-                                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-                                    childAsNode->AttachChild(nodePtr.get());
-                                   // logger::info("Attached candle node to {}", childName);
-                                }
-                            }
-                        }
-                    }
-                    // Done handling this node, call original
-                    return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-                }
-            }
-
-            if (nodeName == "torch") {
-            //    logger::info("torch found");
-
-                RE::NiNode* attachLight = nullptr;
-
-                // Find torchFire node
-                RE::NiNode* torchFire = nullptr;
-                for (auto& child : a_root->children) {
-                    if (auto childNode = child->AsNode()) {
-                        if (childNode->name == "TorchFire") {
-                            torchFire = childNode;
-                            break;
-                        }
-                    }
-                }
-
-                if (torchFire) {
-                    // Find attachLight node inside torchFire
-                    for (auto& child : torchFire->children) {
-                        if (auto childNode = child->AsNode()) {
-                            if (childNode->name == "AttachLight") {
-                                attachLight = childNode;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (attachLight) {
-                    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("torch");
-                    attachLight->AttachChild(nodePtr.get());
-                  //  logger::info("attached light to torch at specific spot {}", nodeName);
-                //    DumpFullTree(a_root.get());
-                    return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-                }
-                else {
-                    logger::warn("hand held torch light placement failed failed for {}", nodeName);
-                }
-            }
             // General case
-                RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-                
-                if (!nodePtr) {
-                    cloneAndAttachNodesForPartialMeshes(nodeName, a_root);
-                }
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
 
-                a_root->AttachChild(nodePtr.get());
-                // logger::info("attached light to keyword mesh {}", nodeName);
+            a_root->AttachChild(nodePtr.get());
+            // logger::info("attached light to keyword mesh {}", nodeName);
         }
-        // Handle dummy nodes if no keyword match
+
+        // Some nodenames are improperly named "dummy" by the base game
         dummyHandler(a_root.get(), nodeName);
     }
 
     // Always call original func if nothing handled
     func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 }
+
 
 
 void PostCreate::Install() {
@@ -214,5 +133,3 @@ void PostCreate::Install() {
 }
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 }
-
-
