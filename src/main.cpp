@@ -8,7 +8,7 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
 
        logger::info("kdata is loaded attempting to initialise and install");
-                    Initialize();
+                 //   Initialize();
 
                     assignClonedNodesToBank();
                        dataHasLoaded = true; 
