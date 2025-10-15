@@ -50,7 +50,7 @@ namespace Hooks {
     const RE::TESFile* refOriginFile = ref->GetDescriptionOwnerFile();
     std::string modName = refOriginFile ? refOriginFile->fileName : "";
 
-    // Early exits: don't disable sunlight or touch RaceMenu lights
+    // Early exits: don't disable sunlight
     if (std::find(excludedSunlightFormIDs.begin(), excludedSunlightFormIDs.end(), formID) != excludedSunlightFormIDs.end())/* ||
         modName.find("RaceMenu") != std::string::npos)*/
     {
