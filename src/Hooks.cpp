@@ -61,7 +61,7 @@ namespace Hooks {
     if (should_disable_light(light, ref, modName))
         return nullptr;
 
-    // Only modify RGB values for lights that are NOT shadow casters
+    // Only modify RGB values for lights that do not chang based on time of day
     if (
         modName.find("EnhancedLightsandFX") == std::string::npos &&
         modName.find("ELFX") == std::string::npos &&
