@@ -45,8 +45,7 @@ inline void splitString(const std::string& input, char delimiter, std::vector<st
     }
 }
 
-inline bool containsAll(std::string ID,
-    const std::vector<std::string_view>& group)
+inline bool containsAll(std::string ID, const std::vector<std::string>& group)
 {
     toLower(ID);
     for (auto g : group) {
@@ -71,6 +70,28 @@ inline bool excludeLightEditorID(const RE::TESObjectLIGH* light) {
     }
 
     return false;
+}
+
+inline std::vector<std::string> SplitKeywordsByComma(const std::string& line) {
+    std::vector<std::string> out;
+
+    for (size_t start = 0; start < line.size();) {
+        size_t commaPos = line.find(',', start);
+        std::string keyword = (commaPos == std::string::npos) ? line.substr(start) : line.substr(start, commaPos - start);
+
+        keyword = trim(keyword);
+        if (!keyword.empty()) {
+            toLower(keyword);
+            out.push_back(std::move(keyword));
+        }
+
+        if (commaPos == std::string::npos)
+            break;
+
+        start = commaPos + 1;
+    }
+
+    return out;
 }
 
 inline void IniParser() {
@@ -223,7 +244,8 @@ inline void ReadMasterListAndFillMaps() {
 
     std::string line;
     std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
-    bool readingSpecificMeshes = true;
+    bool readingPartialMeshes = false;
+    bool excludeByEditorID = false;
 
     while (std::getline(iniFile, line)) {
         line = trim(line);
@@ -232,35 +254,53 @@ inline void ReadMasterListAndFillMaps() {
         if (line.starts_with(";")) {
             if (line.find("PARTIAL SEARCH STRING NODE MATCHES") != std::string::npos) {
                 mapPtr = &keywordTemplateMap;
-                readingSpecificMeshes = false;
+                readingPartialMeshes = true;
+                excludeByEditorID = false;
             }
             else if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
-                break;
+                excludeByEditorID = false;
+            }
+            else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos) {
+                excludeByEditorID = true;
             }
             continue;
         }
 
-        auto pos = line.find('=');
-        if (pos != std::string::npos) {
-            std::string key = trim(line.substr(0, pos));
-            std::string value = trim(line.substr(pos + 1));
-            toLower(key);
-            (*mapPtr)[key] = value;
-
-            if (!readingSpecificMeshes) {
-                keywordNodeBank[key] = {}; /// Initialize the bank dynamically 
-                priorityList.push_back(key);
-            }
-
-            if (readingSpecificMeshes)
-                logger::info("Specific mesh and its template: {} = {}", key, value);
-            else
-                logger::info("Partial search and its template: {} = {}", key, value);
+        if (excludeByEditorID) {
+            std::vector<std::string> keywords = SplitKeywordsByComma(line);
+            if (!keywords.empty()) keywordLightGroups.push_back(std::move(keywords));
         }
+        else {
+            auto pos = line.find('=');
+            if (pos != std::string::npos) {
+                std::string key = trim(line.substr(0, pos));
+                std::string value = trim(line.substr(pos + 1));
+                toLower(key);
+                (*mapPtr)[key] = value;
+
+                if (readingPartialMeshes) {
+                    keywordNodeBank[key] = {};
+                    priorityList.push_back(key);
+                    logger::info("Partial search and its template: {} = {}", key, value);
+                }
+                else {
+                    logger::info("Specific mesh and its template: {} = {}", key, value);
+                }
+            }
+        }
+
     }
 
     for (const auto& [key, value] : keywordNodeBank) {
         logger::info(" NodeBank Setup for partial search {}", key);
+    }
+
+    logger::info("Excluded keywords in Editor ID:");
+    for (const auto& keywords : keywordLightGroups) {
+        for (const auto& k : keywords) {
+            logger::info("{}", k);
+        }
+        logger::info("");
     }
 
     iniFile.close();

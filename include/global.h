@@ -48,12 +48,7 @@ static const std::unordered_map<std::string, std::string> nordicHallMeshesAndTem
 	{ "nortmphallbgcolumn03", "Nordic Column Candles 01 03_NOT Animated.nif"}
 };
 
-static const std::vector<std::vector<std::string_view>> keywordLightGroups = {
-    {"sun", "light"},   // both must be present
-    {"window"},         
-    {"loadscreen"},
-	{"magic"}
-};
+extern std::vector<std::vector<std::string>> keywordLightGroups;
 /*
 
  //extern std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
