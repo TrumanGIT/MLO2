@@ -604,8 +604,6 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
 
     if (it != baseMeshesAndTemplateToAttach.end()) {
 
-        if (isExclude(nodeName, nifPath, a_root.get())) return true;
-
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
 
         auto nodeClone = cloneNiNode(fullPath);

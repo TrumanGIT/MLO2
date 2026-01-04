@@ -102,6 +102,8 @@ namespace Hooks {
         std::string nodeName = a_root->name.c_str();  // grab name of NiNode (usually 1:1 with mesh names)
         toLower(nodeName);
 
+        if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+
         // Try specific meshes first
         if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath))
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
@@ -109,8 +111,6 @@ namespace Hooks {
         auto match = matchedKeyword(nodeName);
 
         if (!match.empty() || nodeName.find("nortmphallbgc") != std::string::npos || nodeName.find("norcathallsm") != std::string::npos || nodeName.find("scene") != std::string::npos) {
-
-            if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
             if (handleSceneRoot(a_nifPath, a_root, nodeName))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
