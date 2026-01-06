@@ -33,9 +33,11 @@ std::unordered_map<std::string, std::string>
 
 std::unordered_map<std::string, std::string> keywordTemplateMap = {};
 
+std::map<std::string, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank = {};
+
 std::vector<std::vector<std::string>> keywordLightGroups;
 
-std::map<std::string, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank = {};
+std::vector<std::vector<std::string>> excludedCells;
 
 //std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;
 

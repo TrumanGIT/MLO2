@@ -49,6 +49,8 @@ static const std::unordered_map<std::string, std::string> nordicHallMeshesAndTem
 };
 
 extern std::vector<std::vector<std::string>> keywordLightGroups;
+
+extern std::vector<std::vector<std::string>> excludedCells;
 /*
 
  //extern std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;

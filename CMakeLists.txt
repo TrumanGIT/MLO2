@@ -28,9 +28,9 @@ add_include_folder(vendor/include)
 
 
 cmake_minimum_required(VERSION 3.21)
-set(AUTHOR_NAME "MLO2 Team")
-set(PRODUCT_NAME "MLO2")
-set(BEAUTIFUL_NAME "MLO2")
+set(AUTHOR_NAME "MLO Team")
+set(PRODUCT_NAME "MLO")
+set(BEAUTIFUL_NAME "MLO")
 
 project(${PRODUCT_NAME} VERSION 1.0.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)

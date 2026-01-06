@@ -34,11 +34,18 @@ namespace Hooks {
         bool useLightRadius,
         bool affectRequesterOnly)
     {
+
+       auto player = RE::PlayerCharacter::GetSingleton();
+
+       auto currentCell = player->GetParentCell(); 
       
         if (!ref || !light)
             return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
 
         if (excludeLightEditorID(light))
+            return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
+
+        if (excludeByCellEditorID(currentCell))
             return func(light, ref, node, forceDynamic, useLightRadius, affectRequesterOnly);
 
         // get the name of the mod owning the light

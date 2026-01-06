@@ -72,6 +72,27 @@ inline bool excludeLightEditorID(const RE::TESObjectLIGH* light) {
     return false;
 }
 
+inline bool excludeByCellEditorID(const RE::TESObjectCELL* cell) {
+
+    if (!cell) {
+        return false;
+    }
+
+
+    std::string edid = clib_util::editorID::get_editorID(cell);
+
+    if (!edid.empty()) {
+        for (const auto& group : excludedCells) {
+            if (containsAll(edid, group)) {
+                logger::info("Excluding light by editorID: {}", edid);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 inline std::vector<std::string> SplitKeywordsByComma(const std::string& line) {
     std::vector<std::string> out;
 
@@ -228,7 +249,8 @@ inline void IniParser() {
     }
 }
 
-inline void ReadMasterListAndFillMaps() {
+inline void ReadMasterListAndFillMaps()
+{
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
 
     if (!std::filesystem::exists(path)) {
@@ -244,56 +266,100 @@ inline void ReadMasterListAndFillMaps() {
 
     std::string line;
     std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
+
     bool readingPartialMeshes = false;
     bool excludeByEditorID = false;
+    bool excludeByCell = false;
 
     while (std::getline(iniFile, line)) {
         line = trim(line);
-        if (line.empty()) continue;
+        if (line.empty()) {
+            continue;
+        }
 
+   
         if (line.starts_with(";")) {
+
+
+            readingPartialMeshes = false;
+            excludeByEditorID = false;
+            excludeByCell = false;
+
             if (line.find("PARTIAL SEARCH STRING NODE MATCHES") != std::string::npos) {
                 mapPtr = &keywordTemplateMap;
                 readingPartialMeshes = true;
-                excludeByEditorID = false;
-            }
-            else if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
-                excludeByEditorID = false;
             }
             else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos) {
                 excludeByEditorID = true;
             }
+            else if (line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos) {
+                excludeByCell = true;
+            }
+            else if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
+                mapPtr = &baseMeshesAndTemplateToAttach;
+            }
+
             continue;
         }
 
+ 
         if (excludeByEditorID) {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
-            if (!keywords.empty()) keywordLightGroups.push_back(std::move(keywords));
+
+  
+            keywords.erase(
+                std::remove_if(keywords.begin(), keywords.end(),
+                    [](const std::string& s) { return s.empty(); }),
+                keywords.end()
+            );
+
+            if (!keywords.empty()) {
+                keywordLightGroups.push_back(std::move(keywords));
+            }
+
+            continue; 
+        }
+
+
+        if (excludeByCell) {
+            std::vector<std::string> keywords = SplitKeywordsByComma(line);
+
+            keywords.erase(
+                std::remove_if(keywords.begin(), keywords.end(),
+                    [](const std::string& s) { return s.empty(); }),
+                keywords.end()
+            );
+
+            if (!keywords.empty()) {
+                excludedCells.push_back(std::move(keywords));
+            }
+
+            continue; 
+        }
+
+
+        auto pos = line.find('=');
+        if (pos == std::string::npos) {
+            continue;
+        }
+
+        std::string key = trim(line.substr(0, pos));
+        std::string value = trim(line.substr(pos + 1));
+        toLower(key);
+
+        (*mapPtr)[key] = value;
+
+        if (readingPartialMeshes) {
+            keywordNodeBank[key] = {};
+            priorityList.push_back(key);
+            logger::info("Partial search and its template: {} = {}", key, value);
         }
         else {
-            auto pos = line.find('=');
-            if (pos != std::string::npos) {
-                std::string key = trim(line.substr(0, pos));
-                std::string value = trim(line.substr(pos + 1));
-                toLower(key);
-                (*mapPtr)[key] = value;
-
-                if (readingPartialMeshes) {
-                    keywordNodeBank[key] = {};
-                    priorityList.push_back(key);
-                    logger::info("Partial search and its template: {} = {}", key, value);
-                }
-                else {
-                    logger::info("Specific mesh and its template: {} = {}", key, value);
-                }
-            }
+            logger::info("Specific mesh and its template: {} = {}", key, value);
         }
-
     }
 
-    for (const auto& [key, value] : keywordNodeBank) {
-        logger::info(" NodeBank Setup for partial search {}", key);
-    }
+    iniFile.close();
 
     logger::info("Excluded keywords in Editor ID:");
     for (const auto& keywords : keywordLightGroups) {
@@ -303,8 +369,17 @@ inline void ReadMasterListAndFillMaps() {
         logger::info("");
     }
 
-    iniFile.close();
+    logger::info("Excluded Cells By Editor ID:");
+    for (const auto& keywords : excludedCells) {
+        for (const auto& k : keywords) {
+            logger::info("{}", k);
+        }
+        logger::info("");
+    }
 }
+
+
+
 
 inline void ReadMasterListAndFillExcludes() {
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
