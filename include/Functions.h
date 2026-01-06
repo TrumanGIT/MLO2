@@ -276,10 +276,8 @@ inline void ReadMasterListAndFillMaps()
         if (line.empty()) {
             continue;
         }
-
    
         if (line.starts_with(";")) {
-
 
             readingPartialMeshes = false;
             excludeByEditorID = false;
@@ -306,7 +304,6 @@ inline void ReadMasterListAndFillMaps()
         if (excludeByEditorID) {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
 
-  
             keywords.erase(
                 std::remove_if(keywords.begin(), keywords.end(),
                     [](const std::string& s) { return s.empty(); }),
@@ -377,9 +374,6 @@ inline void ReadMasterListAndFillMaps()
         logger::info("");
     }
 }
-
-
-
 
 inline void ReadMasterListAndFillExcludes() {
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
