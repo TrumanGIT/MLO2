@@ -265,7 +265,7 @@ inline void ReadMasterListAndFillMaps()
     }
 
     std::string line;
-    std::unordered_map<std::string, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
+    std::unordered_map<RE::BSFixedString, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
 
     bool readingPartialMeshes = false;
     bool excludeByEditorID = false;
@@ -573,7 +573,7 @@ inline void glowOrbRemover(RE::NiNode* node)
 }
 
 
-inline bool isExclude(const std::string& nodeName, const char* nifPath, RE::NiNode* root)
+inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
 {
     if (nodeName == "mpscandleflame01.nif" && removeFakeGlowOrbs) {
         if (!root)
@@ -603,7 +603,7 @@ inline bool isExclude(const std::string& nodeName, const char* nifPath, RE::NiNo
 
     // Partial matches in exclusion list
     for (const auto& exclude : exclusionListPartialMatch) {
-        if (nodeName.find(exclude) != std::string::npos)
+        if (nodeName.contains(exclude))
             return true;
     }
 
@@ -623,11 +623,11 @@ inline bool isExclude(const std::string& nodeName, const char* nifPath, RE::NiNo
 }
 
 // finds if a incoming node name matches any of our partial search keywords
-inline std::string matchedKeyword(const std::string& nodeName)
+inline RE::BSFixedString matchedKeyword(const RE::BSFixedString& nodeName)
 {
 
     for (const auto& keyword : priorityList) {
-        if (nodeName.find(keyword) != std::string::npos) {
+        if (nodeName.contains(keyword)) {
             return keyword;
         }
     }
@@ -636,7 +636,7 @@ inline std::string matchedKeyword(const std::string& nodeName)
 }
 
 //we clone and store ni nodes in a bank on startup to help with performance 
-inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const std::string& keyword)
+inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const RE::BSFixedString& keyword)
 {
     auto it = keywordNodeBank.find(keyword);
 
@@ -648,7 +648,7 @@ inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const std::string& keyword)
     auto& bank = it->second; // keywords nodebank array
 
     // static here means initialised once and map contents survive each call (personal note)
-    static std::unordered_map<std::string, std::size_t> counters;
+    static std::unordered_map<RE::BSFixedString, std::size_t> counters;
     auto& count = counters[keyword];                                 // index for the next node to use in bank
 
     if (count >= bank.size())
@@ -657,7 +657,7 @@ inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const std::string& keyword)
     RE::NiPointer<RE::NiNode> node = bank[count];
 
     if (!node) {
-        logger::warn("getNextNodeFromBank: '{}' node index {} is null", keyword, count);
+      //  logger::warn("getNextNodeFromBank: '{}' node index {} is null", keyword.c_str(), count);
         return nullptr;
     }
 
@@ -667,11 +667,13 @@ inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const std::string& keyword)
 }
 
 
-inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root, const char* nifPath) {
+inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString& nodeName, RE::NiPointer<RE::NiNode>& a_root, const char* nifPath) {
 
     auto it = baseMeshesAndTemplateToAttach.find(nodeName);
 
     if (it != baseMeshesAndTemplateToAttach.end()) {
+
+        if (isExclude(nodeName, nifPath, a_root.get())) return true;
 
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
 
@@ -683,7 +685,6 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const std::string& nodeName, RE
 
         a_root->AttachChild(nodeClone.get());
         //logger::warn("attached node to specific mesh {} ", nodeName);
-
 
         if (removeFakeGlowOrbs) {
             glowOrbRemover(a_root.get());
@@ -847,6 +848,14 @@ inline bool TorchHandler(const std::string& nodeName, RE::NiPointer<RE::NiNode>&
         RE::NiNode* attachLight = nullptr;
         RE::NiNode* torchFire = nullptr;
 
+
+        auto ui = RE::UI::GetSingleton();
+
+        if (ui && ui->IsMenuOpen("InventoryMenu")) {
+            //logger::info("Inventory menu is open, skipping PostCreate processing"); // do we even need that? 
+            return true;
+        }
+
         // must null check everything or crash city. 
 
         for (auto& child : a_root->GetChildren()) {
@@ -977,11 +986,11 @@ inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_ro
     }
 }
 // some nodes are called dummy this is to take care of them.
-inline void dummyHandler(RE::NiNode* root, std::string nodeName)
+inline void dummyHandler(RE::NiNode* root,const RE::BSFixedString& nodeName)
 {
     // Only operate on nodes whose own name contains "dummy"
 
-    if (nodeName.find("dummy") == std::string::npos)
+    if (!nodeName.contains("dummy"))
         return;
 
     if (removeFakeGlowOrbs)

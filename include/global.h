@@ -2,10 +2,20 @@
 #include <unordered_set>
 #include <unordered_map>
 
+namespace std {
+	template <>
+	struct hash<RE::BSFixedString> {
+		std::size_t operator()(const RE::BSFixedString& s) const noexcept {
+			return static_cast<std::size_t>(RE::BSCRC32_<RE::BSFixedString>()(s));
+		}
+	};
+}
+
 extern bool disableShadowCasters;
 extern bool disableTorchLights;
 extern bool removeFakeGlowOrbs;
 extern bool enableColorConsistency;
+
 extern bool dataHasLoaded;
 
 extern uint8_t red;
@@ -18,19 +28,19 @@ extern RE::FormID apocryphaFormID;
 
 extern std::vector<std::string> whitelist;
 
-extern std::vector<std::string> exclusionList;
+extern std::vector<RE::BSFixedString> exclusionList;
 
-extern std::vector<std::string> exclusionListPartialMatch;
+extern std::vector<RE::BSFixedString> exclusionListPartialMatch;
 
 extern std::unordered_set<RE::FormID> excludedLightFormIDs;
 
-extern std::vector<std::string> priorityList;
+extern std::vector<RE::BSFixedString> priorityList;
 
-extern std::unordered_map<std::string, std::string> baseMeshesAndTemplateToAttach;
+extern std::unordered_map<RE::BSFixedString, std::string> baseMeshesAndTemplateToAttach;
 
-extern std::unordered_map<std::string, std::string> keywordTemplateMap;
+extern std::unordered_map<RE::BSFixedString, std::string> keywordTemplateMap;
 
-extern std::map<std::string, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank;
+extern std::unordered_map<RE::BSFixedString, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank;
 
 // defined as static const for potential caching
 static const std::unordered_map<std::string, std::string> nordicHallMeshesAndTemplates = {

@@ -1,7 +1,6 @@
 #include "Hooks.h"
 #include "Functions.h"
 #include "global.h"
-#include <map>
 #include <array>
 #include <string>
 #include <unordered_set>
@@ -95,21 +94,12 @@ namespace Hooks {
         RE::NiPointer<RE::NiNode>& a_root,
         std::uint32_t& a_typeOut)
     {
-        auto ui = RE::UI::GetSingleton();
 
         if (!dataHasLoaded || !a_root) {
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
         }
 
-        if (ui && ui->IsMenuOpen("InventoryMenu")) {
-            //logger::info("Inventory menu is open, skipping PostCreate processing"); // do we even need that? 
-            return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-        }
-
-        std::string nodeName = a_root->name.c_str();  // grab name of NiNode (usually 1:1 with mesh names)
-        toLower(nodeName);
-
-        if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+        RE::BSFixedString& nodeName = a_root->name;  // grab name of NiNode (usually 1:1 with mesh names)
 
         // Try specific meshes first
         if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath))
@@ -117,18 +107,24 @@ namespace Hooks {
 
         auto match = matchedKeyword(nodeName);
 
-        if (!match.empty() || nodeName.find("nortmphallbgc") != std::string::npos || nodeName.find("norcathallsm") != std::string::npos || nodeName.find("scene") != std::string::npos) {
+        if (!match.empty() || nodeName.contains("nortmphallbgc") || nodeName.contains("norcathallsm") || nodeName.contains("scene")) {
 
-            if (handleSceneRoot(a_nifPath, a_root, nodeName))
+            if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+
+            std::string nodeNameStr = nodeName.c_str();
+
+            toLower(nodeNameStr);
+
+            if (handleSceneRoot(a_nifPath, a_root, nodeNameStr))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
    
             if (removeFakeGlowOrbs)
                 glowOrbRemover(a_root.get());
 
-            if (TorchHandler(nodeName, a_root))
+            if (TorchHandler(nodeNameStr, a_root))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            if (applyCorrectNordicHallTemplate(nodeName, a_root))
+            if (applyCorrectNordicHallTemplate(nodeNameStr, a_root))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);

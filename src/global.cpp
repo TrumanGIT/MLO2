@@ -21,19 +21,19 @@ RE::FormID apocryphaFormID = 0x0401C0B2;
 
 std::vector<std::string> whitelist;
 
-std::vector<std::string> exclusionList; 
+std::vector<RE::BSFixedString> exclusionList; 
 
-std::vector<std::string> exclusionListPartialMatch;
+std::vector<RE::BSFixedString> exclusionListPartialMatch;
 
-std::vector<std::string> priorityList = {};
+std::vector<RE::BSFixedString> priorityList = {};
 
 // nodeName (lowercased) -> template mesh path
-std::unordered_map<std::string, std::string>
+std::unordered_map<RE::BSFixedString, std::string>
     baseMeshesAndTemplateToAttach = {};
 
-std::unordered_map<std::string, std::string> keywordTemplateMap = {};
+std::unordered_map<RE::BSFixedString, std::string> keywordTemplateMap = {};
 
-std::map<std::string, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank = {};
+std::unordered_map<RE::BSFixedString, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank = {};
 
 std::vector<std::vector<std::string>> keywordLightGroups;
 
