@@ -37,6 +37,8 @@ std::unordered_map<RE::BSFixedString, std::vector<RE::NiPointer<RE::NiNode>>> ke
 
 std::vector<std::vector<std::string>> keywordLightGroups;
 
+std::vector<std::vector<std::string>> RGBExcludedLights;
+
 std::vector<std::vector<std::string>> excludedCells;
 
 //std::unordered_map<RE::TESModel*, std::string> ModelsAndOriginalFilePaths;

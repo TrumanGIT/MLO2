@@ -34,6 +34,8 @@ extern std::vector<RE::BSFixedString> exclusionListPartialMatch;
 
 extern std::unordered_set<RE::FormID> excludedLightFormIDs;
 
+extern std::vector<std::vector<std::string>> RGBExcludedLights;
+
 extern std::vector<RE::BSFixedString> priorityList;
 
 extern std::unordered_map<RE::BSFixedString, std::string> baseMeshesAndTemplateToAttach;

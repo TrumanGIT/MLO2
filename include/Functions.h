@@ -72,6 +72,22 @@ inline bool excludeLightEditorID(const RE::TESObjectLIGH* light) {
     return false;
 }
 
+inline bool excludeLightFromRGB(const RE::TESObjectLIGH* light) {
+
+    std::string edid = clib_util::editorID::get_editorID(light);
+
+    if (!edid.empty()) {
+        for (const auto& group : RGBExcludedLights) {
+            if (containsAll(edid, group)) {
+                logger::info("Excluding light by editorID: {}", edid);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 inline bool excludeByCellEditorID(const RE::TESObjectCELL* cell) {
 
     if (!cell) {
@@ -269,6 +285,7 @@ inline void ReadMasterListAndFillMaps()
 
     bool readingPartialMeshes = false;
     bool excludeByEditorID = false;
+    bool excludeRGBByEditorID = false;
     bool excludeByCell = false;
 
     while (std::getline(iniFile, line)) {
@@ -281,6 +298,7 @@ inline void ReadMasterListAndFillMaps()
 
             readingPartialMeshes = false;
             excludeByEditorID = false;
+            excludeRGBByEditorID = false;
             excludeByCell = false;
 
             if (line.find("PARTIAL SEARCH STRING NODE MATCHES") != std::string::npos) {
@@ -289,6 +307,9 @@ inline void ReadMasterListAndFillMaps()
             }
             else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos) {
                 excludeByEditorID = true;
+            }
+            else if (line.find("EXCLUDE LIGHT FROM RGB CHANGES BY EDITOR ID") != std::string::npos) {
+                excludeRGBByEditorID = true;
             }
             else if (line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos) {
                 excludeByCell = true;
@@ -300,7 +321,22 @@ inline void ReadMasterListAndFillMaps()
             continue;
         }
 
- 
+        if (excludeRGBByEditorID) {
+            std::vector<std::string> keywords = SplitKeywordsByComma(line);
+
+            keywords.erase(
+                std::remove_if(keywords.begin(), keywords.end(),
+                    [](const std::string& s) { return s.empty(); }),
+                keywords.end()
+            );
+
+            if (!keywords.empty()) {
+                RGBExcludedLights.push_back(std::move(keywords));
+            }
+
+            continue; 
+        }
+
         if (excludeByEditorID) {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
 
@@ -314,7 +350,7 @@ inline void ReadMasterListAndFillMaps()
                 keywordLightGroups.push_back(std::move(keywords));
             }
 
-            continue; 
+            continue;
         }
 
 
@@ -373,6 +409,15 @@ inline void ReadMasterListAndFillMaps()
         }
         logger::info("");
     }
+
+
+    logger::info("Excluded Lights from RBG Changes By Editor ID:");
+    for (const auto& keywords : RGBExcludedLights) {
+        for (const auto& k : keywords) {
+            logger::info("{}", k);
+        }
+        logger::info("");
+    }
 }
 
 inline void ReadMasterListAndFillExcludes() {
@@ -405,6 +450,8 @@ inline void ReadMasterListAndFillExcludes() {
             else if (line.find("EXCLUDE PARTIAL NODES BY NAME") != std::string::npos) {
                 section = 2;
             }
+            else if (line == "; EXCLUDE BY EDITOR ID") return;
+           
             continue;
         }
 

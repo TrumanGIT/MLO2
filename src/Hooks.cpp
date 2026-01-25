@@ -59,11 +59,10 @@ namespace Hooks {
         //doint want to change color of lights that change color based on time of day. 
         if (modName.find("window shadows ultimate") == std::string::npos && enableColorConsistency)
         {
+            if (!excludeLightFromRGB(light))
             light->data.color.red = red;
             light->data.color.green = green;
             light->data.color.blue = blue;
-
-            //  logger::info("Changed color for light {:X} from {}", formID, modName);
         }
         // else {
         //     logger::info("Excluding shadow caster or mod light {:X}", formID);
