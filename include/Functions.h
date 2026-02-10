@@ -619,29 +619,35 @@ inline void glowOrbRemover(RE::NiNode* node)
     }
 }
 
+inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
+    if (nodeName == "MPSCandleFlame01.nif" && removeFakeGlowOrbs) {
 
-inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
-{
-    if (nodeName == "mpscandleflame01.nif" && removeFakeGlowOrbs) {
         if (!root)
-            return true;
+            return;
 
         // this is to remove glow orbs from Master particle system candles
         if (auto* flameNode = root->GetObjectByName("mpscandleflame01")) {
             if (auto* flameNiNode = flameNode->AsNode()) {
 
-               
+
                 if (auto* glowEmitter = flameNiNode->GetObjectByName("CandleGlow01-Emitter")) {
                     if (auto* emitterNode = glowEmitter->AsNode()) {
                         emitterNode->SetAppCulled(true);
                         logger::info("Culled CandleGlow01 emitter safely (no iteration)");
-                        return true;
+                        return;
                     }
                 }
             }
         }
     }
+}
 
+
+
+
+inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
+{
+    
     // Exact matches in exclusion list
     for (const auto& exclude : exclusionList) {
         if (nodeName == exclude)

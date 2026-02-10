@@ -100,6 +100,10 @@ namespace Hooks {
 
         RE::BSFixedString& nodeName = a_root->name;  // grab name of NiNode (usually 1:1 with mesh names)
 
+        if (removeFakeGlowOrbs) {
+            cullMPSGlow(nodeName, a_root.get());
+        }
+
         // Try specific meshes first
         if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath))
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
