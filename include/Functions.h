@@ -904,6 +904,28 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
             if (nodePtr) {
                 candleNiNode->AttachChild(nodePtr.get());
+                return true;
+            }
+        }
+    }
+
+    if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid02")) {
+        if (auto* candleNiNode = candleNode->AsNode()) {
+
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+            if (nodePtr) {
+                candleNiNode->AttachChild(nodePtr.get());
+            }
+        }
+    }
+
+    if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid03")) {
+        if (auto* candleNiNode = candleNode->AsNode()) {
+
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+            if (nodePtr) {
+                candleNiNode->AttachChild(nodePtr.get());
+                return true;
             }
         }
     }
