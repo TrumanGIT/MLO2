@@ -909,7 +909,7 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         }
     }
 
-    if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid02")) {
+  /*  if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid02")) {
         if (auto* candleNiNode = candleNode->AsNode()) {
 
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
@@ -925,10 +925,10 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
             if (nodePtr) {
                 candleNiNode->AttachChild(nodePtr.get());
-                return true;
+               // return true;
             }
         }
-    }
+    }*/
 }
 
 // torches need special placement of light so they dont light up when not equipped. 
