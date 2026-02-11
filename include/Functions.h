@@ -301,7 +301,7 @@ inline void ReadMasterListAndFillMaps()
             excludeRGBByEditorID = false;
             excludeByCell = false;
 
-            if (line.find("PARTIAL SEARCH STRING NODE MATCHES") != std::string::npos) {
+            if (line.find("keyword") != std::string::npos) {
                 mapPtr = &keywordTemplateMap;
                 readingPartialMeshes = true;
             }
@@ -447,7 +447,7 @@ inline void ReadMasterListAndFillExcludes() {
             if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
                 section = 1;
             }
-            else if (line.find("EXCLUDE PARTIAL NODES BY NAME") != std::string::npos) {
+            else if (line.find("Meshes with") != std::string::npos) {
                 section = 2;
             }
             else if (line == "; EXCLUDE BY EDITOR ID") return;
@@ -629,7 +629,7 @@ inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
         if (auto* flameNode = root->GetObjectByName("mpscandleflame01")) {
             if (auto* flameNiNode = flameNode->AsNode()) {
 
-
+                if (!flameNiNode) return;
                 if (auto* glowEmitter = flameNiNode->GetObjectByName("CandleGlow01-Emitter")) {
                     if (auto* emitterNode = glowEmitter->AsNode()) {
                         emitterNode->SetAppCulled(true);
@@ -641,8 +641,6 @@ inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
         }
     }
 }
-
-
 
 
 inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
@@ -892,6 +890,24 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
             return;
         }
     } */
+
+inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
+    if (nodeName != "MissiveBoard_new.nif") return false;
+
+    if (!root)
+        return true;
+
+    // this is to remove glow orbs from Master particle system candles
+    if (auto* candleNode = root->GetObjectByName("CandleLanternWithCandle")) {
+        if (auto* candleNiNode = candleNode->AsNode()) {
+
+            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+            if (nodePtr) {
+                candleNiNode->AttachChild(nodePtr.get());
+            }
+        }
+    }
+}
 
 // torches need special placement of light so they dont light up when not equipped. 
 inline bool TorchHandler(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root)

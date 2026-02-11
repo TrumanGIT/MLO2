@@ -104,6 +104,8 @@ namespace Hooks {
             cullMPSGlow(nodeName, a_root.get());
         }
 
+        missivesPatch(nodeName, a_root.get());
+
         // Try specific meshes first
         if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath))
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
