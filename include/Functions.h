@@ -193,11 +193,6 @@ inline void IniParser() {
             spdlog::info("INI override: enableColorConsistency = {}", enableColorConsistency);
         }
 
-        /*else if (line.starts_with("forswornFires=")) {
-            forswornFires = line.substr(std::string("forswornFires=").length());
-            spdlog::info("INI override: forswornFires = {}", forswornFires);
-
-        } */
         else if (line.starts_with("RGB Values=")) {
             auto values = line.substr(std::string("RGB Values=").length());
 
@@ -422,53 +417,46 @@ inline void ReadMasterListAndFillMaps()
 
 inline void ReadMasterListAndFillExcludes() {
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
-
     if (!std::filesystem::exists(path)) {
         logger::warn("INI file not found: {}", path);
         return;
     }
-
     std::ifstream iniFile(path);
     if (!iniFile.is_open()) {
         logger::warn("Failed to open INI file: {}", path);
         return;
     }
-
     std::string line;
-    int section = 0; // 0=normal, 1=exact excludes, 2=partial excludes
-
+    int section = 0; // 0=skip, 1=exact excludes, 2=partial excludes
     while (std::getline(iniFile, line)) {
         line = trim(line);
         if (line.empty())
             continue;
-
         if (line.starts_with(";")) {
-            // detect section headers
             if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
                 section = 1;
             }
-            else if (line.find("Meshes with") != std::string::npos) {
+            else if (line.find("EXCLUDE PARTIAL NODES BY NAME") != std::string::npos) {
                 section = 2;
             }
-            else if (line == "; EXCLUDE BY EDITOR ID") return;
-           
+            else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos ||
+                line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos ||
+                line.find("EXCLUDE LIGHT FROM RGB") != std::string::npos) {
+                section = 0; // stop processing excludes
+            }
             continue;
         }
-
         if (section == 1) {
-            line = trim(line);  // already trimming, good
-            toLower(line);      // lowercase for consistency
+            toLower(line);
             exclusionList.push_back(line);
-            logger::info("Added exact exclude: '{}'", line);  // wrap in quotes to see trailing whitespace
+            logger::info("Added exact exclude: '{}'", line);
         }
         else if (section == 2) {
-            line = trim(line);
             toLower(line);
             exclusionListPartialMatch.push_back(line);
             logger::info("Added partial exclude: '{}'", line);
         }
     }
-
     iniFile.close();
 }
 
@@ -892,43 +880,96 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
     } */
 
 inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
-    if (nodeName != "MissiveBoard_new.nif") return false;
+    if (nodeName == "MissiveBoard_new.nif") {
+        if (!root)
+            return true;
 
-    if (!root)
-        return true;
+        // this is to remove glow orbs from Master particle system candles
+        if (auto* candleNode = root->GetObjectByName("CandleLanternWithCandle")) {
+            if (auto* candleNiNode = candleNode->AsNode()) {
 
-    // this is to remove glow orbs from Master particle system candles
-    if (auto* candleNode = root->GetObjectByName("CandleLanternWithCandle")) {
-        if (auto* candleNiNode = candleNode->AsNode()) {
+                RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
+                if (nodePtr) {
+                    candleNiNode->AttachChild(nodePtr.get());
+                    return true;
+                }
+            }
+        }
+    }
 
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-            if (nodePtr) {
-                candleNiNode->AttachChild(nodePtr.get());
+
+    else if (nodeName == "DiverseMissiveBoard") {
+    
+        std::string templatePath = "Meshes\\MLO\\Templates\\DiverseMissiveBoard_NOT Animated.nif";
+
+        RE::NiPointer<RE::NiNode> loaded;
+        auto args = RE::BSModelDB::DBTraits::ArgsType();
+
+        auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
+        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+            logger::warn("Failed to load NIF file {}", templatePath);
+            return false;
+        }
+
+        auto fadeNode = loaded->AsNode();
+        if (!fadeNode) {
+            logger::warn("Loaded NIF has no root node: {}", templatePath);
+            return false;
+        }
+
+        RE::NiCloningProcess cloneProc;
+
+        for (const auto& child : fadeNode->GetChildren()) {
+            if (!child) {
                 return true;
             }
-        }
-    }
 
-  /*  if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid02")) {
-        if (auto* candleNiNode = candleNode->AsNode()) {
-
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-            if (nodePtr) {
-                candleNiNode->AttachChild(nodePtr.get());
+            auto childAsNode = child->AsNode();
+            if (childAsNode) {
+                auto clone = childAsNode->CreateClone(cloneProc);
+                if (clone) {
+                    root->AttachChild(clone->AsNode());
+                }
             }
         }
     }
 
-    if (auto* candleNode = root->GetObjectByName("Ruins_FloorCandleLampMid03")) {
-        if (auto* candleNiNode = candleNode->AsNode()) {
+    else if (nodeName == "DiverseMissiveBoardRuins") {
 
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-            if (nodePtr) {
-                candleNiNode->AttachChild(nodePtr.get());
-               // return true;
+        std::string templatePath = "Meshes\\MLO\\Templates\\ DiverseMissiveBoardRuins_NOT Animated.nif";
+
+        RE::NiPointer<RE::NiNode> loaded;
+        auto args = RE::BSModelDB::DBTraits::ArgsType();
+
+        auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
+        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+            logger::warn("Failed to load NIF file {}", templatePath);
+            return false;
+        }
+
+        auto fadeNode = loaded->AsNode();
+        if (!fadeNode) {
+            logger::warn("Loaded NIF has no root node: {}", templatePath);
+            return false;
+        }
+
+        RE::NiCloningProcess cloneProc;
+
+        for (const auto& child : fadeNode->GetChildren()) {
+            if (!child) {
+                return true;
+            }
+
+            auto childAsNode = child->AsNode();
+            if (childAsNode) {
+                auto clone = childAsNode->CreateClone(cloneProc);
+                if (clone) {
+                    root->AttachChild(clone->AsNode());
+                }
             }
         }
-    }*/
+    }
+
 }
 
 // torches need special placement of light so they dont light up when not equipped. 
