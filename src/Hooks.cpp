@@ -106,17 +106,23 @@ namespace Hooks {
             cullMPSGlow(nodeName, a_root.get());
         }
 
+
         if (missivesPatch(nodeName, a_root.get())) {
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
         }
 
+
         // Try specific meshes first
-        if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath))
+        if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath)) {
+          //  logger::info("attached {} template to {}", nodeName.c_str());
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+        }
+        
 
         auto match = matchedKeyword(nodeName);
 
         if (!match.empty() || nodeName.contains("nortmphallbgc") || nodeName.contains("norcathallsm") || nodeName.contains("scene")) {
+
 
             if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
@@ -139,8 +145,9 @@ namespace Hooks {
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
             if (nodePtr) { // scene is apart of the nodebank but we do not want to attach nodes for scene. 
                 a_root->AttachChild(nodePtr.get());
+                logger::info("attached light to keyword mesh {}", nodeName);
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-                //    logger::info("attached light to keyword mesh {}", nodeName);
+             
             }
           //  else {
                // logger::warn("Light node we tried to attach was null', skipping attachment", match);

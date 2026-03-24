@@ -633,30 +633,35 @@ inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
 
 inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
 {
-    
     // Exact matches in exclusion list
     for (const auto& exclude : exclusionList) {
-        if (nodeName == exclude)
+        if (nodeName == exclude) {
+            logger::debug("isExclude: '{}' matched exact exclude '{}'", nodeName.c_str(), exclude);
             return true;
+        }
     }
 
     // Partial matches in exclusion list
     for (const auto& exclude : exclusionListPartialMatch) {
-        if (nodeName.contains(exclude))
+        if (nodeName.contains(exclude)) {
+            logger::debug("isExclude: '{}' matched partial exclude '{}'", nodeName.c_str(), exclude);
             return true;
+        }
     }
 
-
-    if (!nifPath)
+    if (!nifPath) {
+        logger::debug("isExclude: '{}' has null nifPath", nodeName.c_str());
         return false;
-
+    }
 
     std::string path = nifPath;
     toLower(path);
 
     // Some modded torches name "off" variants incorrectly
-    if (path.find("off") != std::string::npos)
+    if (path.find("off") != std::string::npos) {
+        logger::debug("isExclude: '{}' excluded due to 'off' in path '{}'", nodeName.c_str(), path);
         return true;
+    }
 
     return false;
 }
@@ -712,20 +717,25 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString& nodeNa
 
     if (it != baseMeshesAndTemplateToAttach.end()) {
 
-        if (isExclude(nodeName, nifPath, a_root.get())) return true;
+        if (isExclude(nodeName, nifPath, a_root.get())) {
+            logger::debug("cloneAttach: '{}' skipped due to exclusion", nodeName.c_str());
+            return true;
+        }
 
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
 
         auto nodeClone = cloneNiNode(fullPath);
         if (!nodeClone) {
-            logger::warn("Failed to clone from template for {}", nodeName);
+            logger::warn("cloneAttach: Failed to clone template '{}' for '{}'", fullPath, nodeName.c_str());
             return false;
         }
 
+        logger::debug("cloneAttach: Attaching template '{}' to '{}'", fullPath, nodeName.c_str());
+
         a_root->AttachChild(nodeClone.get());
-        //logger::warn("attached node to specific mesh {} ", nodeName);
 
         if (removeFakeGlowOrbs) {
+            logger::debug("cloneAttach: Running glowOrbRemover for '{}'", nodeName.c_str());
             glowOrbRemover(a_root.get());
         }
 
@@ -882,12 +892,10 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
 inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
     if (nodeName == "MissiveBoard_new.nif") {
         if (!root)
-            return true;
+            return false;
 
-        // this is to remove glow orbs from Master particle system candles
         if (auto* candleNode = root->GetObjectByName("CandleLanternWithCandle")) {
             if (auto* candleNiNode = candleNode->AsNode()) {
-
                 RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
                 if (nodePtr) {
                     candleNiNode->AttachChild(nodePtr.get());
@@ -895,33 +903,85 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
                 }
             }
         }
+
+        return false;
     }
 
+    if (nodeName.contains("DiverseMissiveBoardRuins")) {
+        logger::debug("MissiveBoard: matched RUINS variant for node '{}'", nodeName);
 
-    else if (nodeName == "DiverseMissiveBoard") {
-    
+        std::string templatePath = "Meshes\\MLO\\Templates\\DiverseMissiveBoardRuins_NOT Animated.nif";
+        logger::debug("Loading template: {}", templatePath);
+
+        RE::NiPointer<RE::NiNode> loaded;
+        auto args = RE::BSModelDB::DBTraits::ArgsType();
+
+        auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
+        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+            logger::warn("MissiveBoard: Failed to load NIF file {}", templatePath);
+            return false;
+        }
+
+        auto fadeNode = loaded->AsNode();
+        if (!fadeNode) {
+            logger::warn("MissiveBoard: Loaded NIF has no root node: {}", templatePath);
+            return false;
+        }
+
+        RE::NiCloningProcess cloneProc;
+        std::size_t attachedCount = 0;
+
+        for (const auto& child : fadeNode->GetChildren()) {
+            if (!child) {
+                logger::debug("MissiveBoard: Encountered null child, skipping");
+                continue;
+            }
+
+            auto childAsNode = child->AsNode();
+            if (childAsNode) {
+                auto clone = childAsNode->CreateClone(cloneProc);
+                if (clone) {
+                    root->AttachChild(clone->AsNode());
+                    attachedCount++;
+                }
+                else {
+                    logger::debug("MissiveBoard: Failed to clone a child node");
+                }
+            }
+        }
+
+        logger::debug("MissiveBoard: Attached {} children from RUINS template", attachedCount);
+        return attachedCount > 0;
+    }
+
+    if (nodeName.contains("DiverseMissiveBoard")) {
+        logger::debug("MissiveBoard: matched DEFAULT variant for node '{}'", nodeName);
+
         std::string templatePath = "Meshes\\MLO\\Templates\\DiverseMissiveBoard_NOT Animated.nif";
+        logger::debug("Loading template: {}", templatePath);
 
         RE::NiPointer<RE::NiNode> loaded;
         auto args = RE::BSModelDB::DBTraits::ArgsType();
 
         auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
         if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
-            logger::warn("Failed to load NIF file {}", templatePath);
+            logger::warn("MissiveBoard: Failed to load NIF file {}", templatePath);
             return false;
         }
 
         auto fadeNode = loaded->AsNode();
         if (!fadeNode) {
-            logger::warn("Loaded NIF has no root node: {}", templatePath);
+            logger::warn("MissiveBoard: Loaded NIF has no root node: {}", templatePath);
             return false;
         }
 
         RE::NiCloningProcess cloneProc;
+        std::size_t attachedCount = 0;
 
         for (const auto& child : fadeNode->GetChildren()) {
             if (!child) {
-                return true;
+                logger::debug("MissiveBoard: Encountered null child, skipping");
+                continue;
             }
 
             auto childAsNode = child->AsNode();
@@ -929,47 +989,19 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
                 auto clone = childAsNode->CreateClone(cloneProc);
                 if (clone) {
                     root->AttachChild(clone->AsNode());
+                    attachedCount++;
+                }
+                else {
+                    logger::debug("MissiveBoard: Failed to clone a child node");
                 }
             }
         }
+
+        logger::debug("MissiveBoard: Attached {} children from DEFAULT template", attachedCount);
+        return attachedCount > 0;
     }
 
-    else if (nodeName == "DiverseMissiveBoardRuins") {
-
-        std::string templatePath = "Meshes\\MLO\\Templates\\ DiverseMissiveBoardRuins_NOT Animated.nif";
-
-        RE::NiPointer<RE::NiNode> loaded;
-        auto args = RE::BSModelDB::DBTraits::ArgsType();
-
-        auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
-            logger::warn("Failed to load NIF file {}", templatePath);
-            return false;
-        }
-
-        auto fadeNode = loaded->AsNode();
-        if (!fadeNode) {
-            logger::warn("Loaded NIF has no root node: {}", templatePath);
-            return false;
-        }
-
-        RE::NiCloningProcess cloneProc;
-
-        for (const auto& child : fadeNode->GetChildren()) {
-            if (!child) {
-                return true;
-            }
-
-            auto childAsNode = child->AsNode();
-            if (childAsNode) {
-                auto clone = childAsNode->CreateClone(cloneProc);
-                if (clone) {
-                    root->AttachChild(clone->AsNode());
-                }
-            }
-        }
-    }
-
+    return false;
 }
 
 // torches need special placement of light so they dont light up when not equipped. 
