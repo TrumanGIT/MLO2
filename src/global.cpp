@@ -7,6 +7,7 @@
 
 bool disableShadowCasters = true;
 bool disableTorchLights = true;
+bool disableLights = false;
 bool removeFakeGlowOrbs = true;
 bool enableColorConsistency = true;
 

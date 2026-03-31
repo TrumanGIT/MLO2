@@ -12,6 +12,7 @@ namespace std {
 }
 
 extern bool disableShadowCasters;
+extern bool disableLights;
 extern bool disableTorchLights;
 extern bool removeFakeGlowOrbs;
 extern bool enableColorConsistency;

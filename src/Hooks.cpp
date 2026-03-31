@@ -145,7 +145,7 @@ namespace Hooks {
             RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
             if (nodePtr) { // scene is apart of the nodebank but we do not want to attach nodes for scene. 
                 a_root->AttachChild(nodePtr.get());
-                logger::info("attached light to keyword mesh {}", nodeName);
+                logger::info("attached {} light to keyword mesh {}", match, nodeName);
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
              
             }

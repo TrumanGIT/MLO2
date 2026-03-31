@@ -166,6 +166,20 @@ inline void IniParser() {
 
             spdlog::info("INI override: disableTorchLights = {}", disableTorchLights);
         }
+        else if (line.starts_with("disableLights=")) {
+            std::string value = line.substr(std::string("disableLights=").length());
+            toLower(value);
+
+            if (value == "true" || value == "1")
+                disableLights = true;
+            else if (value == "false" || value == "0")
+                disableLights = false;
+            else
+                spdlog::warn("Invalid value for disableLights: {}", value);
+
+            spdlog::info("INI override: disableLights = {}", disableLights);
+        }
+
         else if (line.starts_with("removeFakeGlowOrbs=")) {
             std::string value = line.substr(std::string("removeFakeGlowOrbs=").length());
             toLower(value);
@@ -792,7 +806,7 @@ inline void write_thunk_call(std::uintptr_t a_src) {
 
 inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* ref, std::string modName)
 {
-    if (!ref || !light || ref->IsDynamicForm()) {
+    if (!ref || !light || ref->IsDynamicForm() || !disableLights) {
         return false;
     }
 
