@@ -43,8 +43,6 @@ extern std::unordered_map<RE::BSFixedString, std::string> baseMeshesAndTemplateT
 
 extern std::unordered_map<RE::BSFixedString, std::string> keywordTemplateMap;
 
-extern std::unordered_map<RE::BSFixedString, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank;
-
 // defined as static const for potential caching
 static const std::unordered_map<std::string, std::string> nordicHallMeshesAndTemplates = {
 	{ "norcathallsm1way01", "Nordic Cata 1way01 Candles_NOT Animated.nif" },

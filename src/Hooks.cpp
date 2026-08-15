@@ -96,11 +96,14 @@ namespace Hooks {
         std::uint32_t& a_typeOut)
     {
 
-        if (!dataHasLoaded || !a_root) {
+        if (!dataHasLoaded || !a_root || isMLOTemplatePath(a_nifPath)) {
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
         }
 
-        RE::BSFixedString& nodeName = a_root->name;  // grab name of NiNode (usually 1:1 with mesh names)
+        const auto& nodeName = a_root->name;  // Preserve the scene node's original name.
+        std::string normalizedNodeNameString = nodeName.c_str();
+        toLower(normalizedNodeNameString);
+        const RE::BSFixedString normalizedNodeName(normalizedNodeNameString);
 
         if (removeFakeGlowOrbs) {
             cullMPSGlow(nodeName, a_root.get());
@@ -113,41 +116,35 @@ namespace Hooks {
 
 
         // Try specific meshes first
-        if (cloneAndAttachNodesForSpecificMeshes(nodeName, a_root, a_nifPath)) {
+        if (cloneAndAttachNodesForSpecificMeshes(normalizedNodeName, a_root, a_nifPath)) {
           //  logger::info("attached {} template to {}", nodeName.c_str());
             return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
         }
         
 
-        auto match = matchedKeyword(nodeName);
+        auto match = matchedKeyword(normalizedNodeName, a_nifPath);
 
-        if (!match.empty() || nodeName.contains("nortmphallbgc") || nodeName.contains("norcathallsm") || nodeName.contains("scene")) {
+        if (!match.empty() || normalizedNodeName.contains("nortmphallbgc") || normalizedNodeName.contains("norcathallsm") || normalizedNodeName.contains("scene")) {
 
 
-            if (isExclude(nodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+            if (isExclude(normalizedNodeName, a_nifPath, a_root.get())) return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            std::string nodeNameStr = nodeName.c_str();
-
-            toLower(nodeNameStr);
-
-            if (handleSceneRoot(a_nifPath, a_root, nodeNameStr))
+            if (handleSceneRoot(a_nifPath, a_root, normalizedNodeNameString))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
    
             if (removeFakeGlowOrbs)
                 glowOrbRemover(a_root.get());
 
-            if (TorchHandler(nodeNameStr, a_root))
+            if (TorchHandler(normalizedNodeNameString, a_nifPath, a_root))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            if (applyCorrectNordicHallTemplate(nodeNameStr, a_root))
+            if (applyCorrectNordicHallTemplate(normalizedNodeNameString, a_root))
                 return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
 
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(match);
-            if (nodePtr) { // scene is apart of the nodebank but we do not want to attach nodes for scene. 
-                a_root->AttachChild(nodePtr.get());
-                logger::info("attached {} light to keyword mesh {}", match, nodeName);
-                return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
-             
+            if (!match.empty()) {
+                if (attachKeywordParticleLight(match, normalizedNodeNameString, a_nifPath, a_root)) {
+                    return func(a_this, a_args, a_nifPath, a_root, a_typeOut);
+                }
             }
           //  else {
                // logger::warn("Light node we tried to attach was null', skipping attachment", match);

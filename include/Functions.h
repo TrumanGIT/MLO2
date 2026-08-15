@@ -11,32 +11,192 @@
 
 namespace logger = SKSE::log;
 
-inline void toLower(std::string& str) {
-    for (auto& c : str) {
+inline void toLower(std::string &str)
+{
+    for (auto &c : str)
+    {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
 }
 
-inline std::string trim(const std::string& s) {
+inline std::string normalizedMeshName(const char *nifPath)
+{
+    if (!nifPath)
+    {
+        return {};
+    }
+
+    std::string meshName = nifPath;
+    const auto separator = meshName.find_last_of("\\/");
+    if (separator != std::string::npos)
+    {
+        meshName.erase(0, separator + 1);
+    }
+
+    const auto extension = meshName.find_last_of('.');
+    if (extension != std::string::npos)
+    {
+        meshName.erase(extension);
+    }
+
+    toLower(meshName);
+    return meshName;
+}
+
+inline bool isMLOTemplatePath(const char *nifPath)
+{
+    if (!nifPath)
+    {
+        return false;
+    }
+
+    std::string normalizedPath = nifPath;
+    toLower(normalizedPath);
+    for (auto &character : normalizedPath)
+    {
+        if (character == '/')
+        {
+            character = '\\';
+        }
+    }
+    return normalizedPath.find("mlo\\templates\\") != std::string::npos;
+}
+
+inline RE::NiNode *findNodeContaining(RE::NiNode *root, const std::string &lookup)
+{
+    if (!root)
+    {
+        return nullptr;
+    }
+
+    std::string rootName = root->name.c_str();
+    toLower(rootName);
+    if (rootName.find(lookup) != std::string::npos)
+    {
+        return root;
+    }
+
+    for (auto &child : root->GetChildren())
+    {
+        if (!child)
+        {
+            continue;
+        }
+
+        auto childNode = child->AsNode();
+        if (!childNode)
+        {
+            continue;
+        }
+
+        auto match = findNodeContaining(childNode, lookup);
+        if (match)
+        {
+            return match;
+        }
+    }
+
+    return nullptr;
+}
+
+inline int fireAttachmentScore(const RE::BSFixedString &name)
+{
+    std::string normalizedName = name.c_str();
+    toLower(normalizedName);
+
+    if (normalizedName.find("bowl") != std::string::npos || normalizedName.find("brazier") != std::string::npos)
+    {
+        return 0;
+    }
+    if (normalizedName.find("ember") != std::string::npos)
+    {
+        return 300;
+    }
+    if (normalizedName.find("flame") != std::string::npos)
+    {
+        return 200;
+    }
+    if (normalizedName.find("fire") != std::string::npos)
+    {
+        return 100;
+    }
+    return 0;
+}
+
+inline void findBestFireAttachmentNode(RE::NiNode *root, RE::NiNode *fixtureRoot, RE::NiNode *&bestNode, int &bestScore)
+{
+    if (!root)
+    {
+        return;
+    }
+
+    for (auto &child : root->GetChildren())
+    {
+        if (!child)
+        {
+            continue;
+        }
+
+        auto childNode = child->AsNode();
+        auto candidateNode = childNode ? childNode : child->parent;
+        const int score = fireAttachmentScore(child->name);
+        if (candidateNode && candidateNode != fixtureRoot && score > bestScore)
+        {
+            bestNode = candidateNode;
+            bestScore = score;
+        }
+
+        if (childNode)
+        {
+            findBestFireAttachmentNode(childNode, fixtureRoot, bestNode, bestScore);
+        }
+    }
+}
+
+inline RE::NiNode *particleLightAttachmentTarget(RE::NiNode *root, const std::string &nodeName, const char *nifPath)
+{
+    if (!root)
+    {
+        return nullptr;
+    }
+
+    std::string targetIdentity = nodeName + " " + normalizedMeshName(nifPath);
+    toLower(targetIdentity);
+    const bool isBowlOrBrazier = targetIdentity.find("bowl") != std::string::npos || targetIdentity.find("brazier") != std::string::npos;
+    if (!isBowlOrBrazier)
+    {
+        return root;
+    }
+
+    RE::NiNode *fireNode = nullptr;
+    int bestScore = 0;
+    findBestFireAttachmentNode(root, root, fireNode, bestScore);
+    return fireNode;
+}
+
+inline std::string trim(const std::string &s)
+{
     size_t start = s.find_first_not_of(" \t");
     size_t end = s.find_last_not_of(" \t");
     return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
 }
 
-
-inline void splitString(const std::string& input, char delimiter, std::vector<std::string>& listToSplit)
+inline void splitString(const std::string &input, char delimiter, std::vector<std::string> &listToSplit)
 {
     std::stringstream ss(input);
     std::string item;
 
-    while (std::getline(ss, item, delimiter)) {
+    while (std::getline(ss, item, delimiter))
+    {
         // Trim leading whitespace
-        while (!item.empty() && std::isspace(static_cast<unsigned char>(item.front()))) {
+        while (!item.empty() && std::isspace(static_cast<unsigned char>(item.front())))
+        {
             item.erase(item.begin());
         }
 
         // Trim trailing whitespace
-        while (!item.empty() && std::isspace(static_cast<unsigned char>(item.back()))) {
+        while (!item.empty() && std::isspace(static_cast<unsigned char>(item.back())))
+        {
             item.pop_back();
         }
 
@@ -45,10 +205,11 @@ inline void splitString(const std::string& input, char delimiter, std::vector<st
     }
 }
 
-inline bool containsAll(std::string ID, const std::vector<std::string>& group)
+inline bool containsAll(std::string ID, const std::vector<std::string> &group)
 {
     toLower(ID);
-    for (auto g : group) {
+    for (auto g : group)
+    {
         if (ID.find(g) == std::string::npos)
             return false;
     }
@@ -56,13 +217,17 @@ inline bool containsAll(std::string ID, const std::vector<std::string>& group)
 }
 
 // Try to exclude light by editorID.
-inline bool excludeLightEditorID(const RE::TESObjectLIGH* light) {
+inline bool excludeLightEditorID(const RE::TESObjectLIGH *light)
+{
 
     std::string edid = clib_util::editorID::get_editorID(light);
 
-    if (!edid.empty()) {
-        for (const auto& group : keywordLightGroups) {
-            if (containsAll(edid, group)) {
+    if (!edid.empty())
+    {
+        for (const auto &group : keywordLightGroups)
+        {
+            if (containsAll(edid, group))
+            {
                 logger::info("Excluding light by editorID: {}", edid);
                 return true;
             }
@@ -72,13 +237,17 @@ inline bool excludeLightEditorID(const RE::TESObjectLIGH* light) {
     return false;
 }
 
-inline bool excludeLightFromRGB(const RE::TESObjectLIGH* light) {
+inline bool excludeLightFromRGB(const RE::TESObjectLIGH *light)
+{
 
     std::string edid = clib_util::editorID::get_editorID(light);
 
-    if (!edid.empty()) {
-        for (const auto& group : RGBExcludedLights) {
-            if (containsAll(edid, group)) {
+    if (!edid.empty())
+    {
+        for (const auto &group : RGBExcludedLights)
+        {
+            if (containsAll(edid, group))
+            {
                 logger::info("Excluding light by editorID: {}", edid);
                 return true;
             }
@@ -88,18 +257,22 @@ inline bool excludeLightFromRGB(const RE::TESObjectLIGH* light) {
     return false;
 }
 
-inline bool excludeByCellEditorID(const RE::TESObjectCELL* cell) {
+inline bool excludeByCellEditorID(const RE::TESObjectCELL *cell)
+{
 
-    if (!cell) {
+    if (!cell)
+    {
         return false;
     }
 
-
     std::string edid = clib_util::editorID::get_editorID(cell);
 
-    if (!edid.empty()) {
-        for (const auto& group : excludedCells) {
-            if (containsAll(edid, group)) {
+    if (!edid.empty())
+    {
+        for (const auto &group : excludedCells)
+        {
+            if (containsAll(edid, group))
+            {
                 logger::info("Excluding light by editorID: {}", edid);
                 return true;
             }
@@ -109,15 +282,18 @@ inline bool excludeByCellEditorID(const RE::TESObjectCELL* cell) {
     return false;
 }
 
-inline std::vector<std::string> SplitKeywordsByComma(const std::string& line) {
+inline std::vector<std::string> SplitKeywordsByComma(const std::string &line)
+{
     std::vector<std::string> out;
 
-    for (size_t start = 0; start < line.size();) {
+    for (size_t start = 0; start < line.size();)
+    {
         size_t commaPos = line.find(',', start);
         std::string keyword = (commaPos == std::string::npos) ? line.substr(start) : line.substr(start, commaPos - start);
 
         keyword = trim(keyword);
-        if (!keyword.empty()) {
+        if (!keyword.empty())
+        {
             toLower(keyword);
             out.push_back(std::move(keyword));
         }
@@ -131,15 +307,19 @@ inline std::vector<std::string> SplitKeywordsByComma(const std::string& line) {
     return out;
 }
 
-inline void IniParser() {
+inline void IniParser()
+{
     std::ifstream iniFile("Data\\SKSE\\Plugins\\MLO.ini");
     std::string line;
 
-    while (std::getline(iniFile, line)) {
+    while (std::getline(iniFile, line))
+    {
         line.erase(0, line.find_first_not_of(" \t"));
-        if (line.empty() || line[0] == ';') continue;
+        if (line.empty() || line[0] == ';')
+            continue;
 
-        if (line.starts_with("disableShadowCasters=")) {
+        if (line.starts_with("disableShadowCasters="))
+        {
             std::string value = line.substr(std::string("disableShadowCasters=").length());
             toLower(value);
 
@@ -151,9 +331,9 @@ inline void IniParser() {
                 spdlog::warn("Invalid value for disableShadowCasters: {}", value);
 
             spdlog::info("INI override: disableShadowCasters = {}", disableShadowCasters);
-
         }
-        else if (line.starts_with("disableTorchLights=")) {
+        else if (line.starts_with("disableTorchLights="))
+        {
             std::string value = line.substr(std::string("disableTorchLights=").length());
             toLower(value);
 
@@ -166,7 +346,8 @@ inline void IniParser() {
 
             spdlog::info("INI override: disableTorchLights = {}", disableTorchLights);
         }
-        else if (line.starts_with("disableLights=")) {
+        else if (line.starts_with("disableLights="))
+        {
             std::string value = line.substr(std::string("disableLights=").length());
             toLower(value);
 
@@ -180,7 +361,8 @@ inline void IniParser() {
             spdlog::info("INI override: disableLights = {}", disableLights);
         }
 
-        else if (line.starts_with("removeFakeGlowOrbs=")) {
+        else if (line.starts_with("removeFakeGlowOrbs="))
+        {
             std::string value = line.substr(std::string("removeFakeGlowOrbs=").length());
             toLower(value);
 
@@ -193,7 +375,8 @@ inline void IniParser() {
 
             spdlog::info("INI override: removeFakeGlowOrbs = {}", removeFakeGlowOrbs);
         }
-        else if (line.starts_with("enableColorConsistency=")) {
+        else if (line.starts_with("enableColorConsistency="))
+        {
             std::string value = line.substr(std::string("enableColorConsistency=").length());
             toLower(value);
 
@@ -207,7 +390,8 @@ inline void IniParser() {
             spdlog::info("INI override: enableColorConsistency = {}", enableColorConsistency);
         }
 
-        else if (line.starts_with("RGB Values=")) {
+        else if (line.starts_with("RGB Values="))
+        {
             auto values = line.substr(std::string("RGB Values=").length());
 
             // Find each color
@@ -215,20 +399,24 @@ inline void IniParser() {
             auto gPos = values.find("Green:");
             auto bPos = values.find("Blue:");
 
-            if (rPos != std::string::npos) {
+            if (rPos != std::string::npos)
+            {
                 red = static_cast<std::uint8_t>(std::stoi(values.substr(rPos + 4)));
             }
-            if (gPos != std::string::npos) {
+            if (gPos != std::string::npos)
+            {
                 green = static_cast<std::uint8_t>(std::stoi(values.substr(gPos + 6)));
             }
-            if (bPos != std::string::npos) {
+            if (bPos != std::string::npos)
+            {
                 blue = static_cast<std::uint8_t>(std::stoi(values.substr(bPos + 5)));
             }
 
             spdlog::info("INI override: Bulb RGB values set to R:{} G:{} B:{}", red, green, blue);
         }
 
-        else if (line.starts_with("whitelist=")) {
+        else if (line.starts_with("whitelist="))
+        {
             std::string prefix = "whitelist=";
 
             toLower(line);
@@ -238,14 +426,16 @@ inline void IniParser() {
             splitString(line, ',', whitelist);
         }
 
-        else if (line.starts_with("loggingLevel")) {
+        else if (line.starts_with("loggingLevel"))
+        {
             std::string value = line.substr(std::string("loggingLevel=").length());
 
-             auto loggingLevel = std::stoi(value);
+            auto loggingLevel = std::stoi(value);
             loggingLevel = std::clamp(loggingLevel, 0, 3);
             logger::info("Logging level set to {}", loggingLevel);
             spdlog::level::level_enum user_level = spdlog::level::info;
-            switch (loggingLevel) {
+            switch (loggingLevel)
+            {
             case 0:
             {
                 user_level = spdlog::level::critical;
@@ -270,7 +460,6 @@ inline void IniParser() {
             spdlog::set_level(user_level);
             spdlog::flush_on(user_level);
         }
-
     }
 }
 
@@ -278,110 +467,125 @@ inline void ReadMasterListAndFillMaps()
 {
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
 
-    if (!std::filesystem::exists(path)) {
+    if (!std::filesystem::exists(path))
+    {
         std::cerr << "INI file not found: " << path << std::endl;
         return;
     }
 
     std::ifstream iniFile(path);
-    if (!iniFile.is_open()) {
+    if (!iniFile.is_open())
+    {
         logger::warn("INI file not found or failed to open, using defaults.");
         return;
     }
 
     std::string line;
-    std::unordered_map<RE::BSFixedString, std::string>* mapPtr = &baseMeshesAndTemplateToAttach;
+    std::unordered_map<RE::BSFixedString, std::string> *mapPtr = &baseMeshesAndTemplateToAttach;
 
     bool readingPartialMeshes = false;
     bool excludeByEditorID = false;
     bool excludeRGBByEditorID = false;
     bool excludeByCell = false;
 
-    while (std::getline(iniFile, line)) {
+    while (std::getline(iniFile, line))
+    {
         line = trim(line);
-        if (line.empty()) {
+        if (line.empty())
+        {
             continue;
         }
-   
-        if (line.starts_with(";")) {
+
+        if (line.starts_with(";"))
+        {
 
             readingPartialMeshes = false;
             excludeByEditorID = false;
             excludeRGBByEditorID = false;
             excludeByCell = false;
 
-            if (line.find("keyword") != std::string::npos) {
+            if (line.find("keyword") != std::string::npos)
+            {
                 mapPtr = &keywordTemplateMap;
                 readingPartialMeshes = true;
             }
-            else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos) {
+            else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos)
+            {
                 excludeByEditorID = true;
             }
-            else if (line.find("EXCLUDE LIGHT FROM RGB CHANGES BY EDITOR ID") != std::string::npos) {
+            else if (line.find("EXCLUDE LIGHT FROM RGB CHANGES BY EDITOR ID") != std::string::npos)
+            {
                 excludeRGBByEditorID = true;
             }
-            else if (line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos) {
+            else if (line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos)
+            {
                 excludeByCell = true;
             }
-            else if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
+            else if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos)
+            {
                 mapPtr = &baseMeshesAndTemplateToAttach;
             }
 
             continue;
         }
 
-        if (excludeRGBByEditorID) {
+        if (excludeRGBByEditorID)
+        {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
 
             keywords.erase(
                 std::remove_if(keywords.begin(), keywords.end(),
-                    [](const std::string& s) { return s.empty(); }),
-                keywords.end()
-            );
+                               [](const std::string &s)
+                               { return s.empty(); }),
+                keywords.end());
 
-            if (!keywords.empty()) {
+            if (!keywords.empty())
+            {
                 RGBExcludedLights.push_back(std::move(keywords));
             }
 
-            continue; 
+            continue;
         }
 
-        if (excludeByEditorID) {
+        if (excludeByEditorID)
+        {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
 
             keywords.erase(
                 std::remove_if(keywords.begin(), keywords.end(),
-                    [](const std::string& s) { return s.empty(); }),
-                keywords.end()
-            );
+                               [](const std::string &s)
+                               { return s.empty(); }),
+                keywords.end());
 
-            if (!keywords.empty()) {
+            if (!keywords.empty())
+            {
                 keywordLightGroups.push_back(std::move(keywords));
             }
 
             continue;
         }
 
-
-        if (excludeByCell) {
+        if (excludeByCell)
+        {
             std::vector<std::string> keywords = SplitKeywordsByComma(line);
 
             keywords.erase(
                 std::remove_if(keywords.begin(), keywords.end(),
-                    [](const std::string& s) { return s.empty(); }),
-                keywords.end()
-            );
+                               [](const std::string &s)
+                               { return s.empty(); }),
+                keywords.end());
 
-            if (!keywords.empty()) {
+            if (!keywords.empty())
+            {
                 excludedCells.push_back(std::move(keywords));
             }
 
-            continue; 
+            continue;
         }
 
-
         auto pos = line.find('=');
-        if (pos == std::string::npos) {
+        if (pos == std::string::npos)
+        {
             continue;
         }
 
@@ -391,12 +595,13 @@ inline void ReadMasterListAndFillMaps()
 
         (*mapPtr)[key] = value;
 
-        if (readingPartialMeshes) {
-            keywordNodeBank[key] = {};
+        if (readingPartialMeshes)
+        {
             priorityList.push_back(key);
             logger::info("Partial search and its template: {} = {}", key, value);
         }
-        else {
+        else
+        {
             logger::info("Specific mesh and its template: {} = {}", key, value);
         }
     }
@@ -404,68 +609,83 @@ inline void ReadMasterListAndFillMaps()
     iniFile.close();
 
     logger::info("Excluded keywords in Editor ID:");
-    for (const auto& keywords : keywordLightGroups) {
-        for (const auto& k : keywords) {
+    for (const auto &keywords : keywordLightGroups)
+    {
+        for (const auto &k : keywords)
+        {
             logger::info("{}", k);
         }
         logger::info("");
     }
 
     logger::info("Excluded Cells By Editor ID:");
-    for (const auto& keywords : excludedCells) {
-        for (const auto& k : keywords) {
+    for (const auto &keywords : excludedCells)
+    {
+        for (const auto &k : keywords)
+        {
             logger::info("{}", k);
         }
         logger::info("");
     }
 
-
     logger::info("Excluded Lights from RBG Changes By Editor ID:");
-    for (const auto& keywords : RGBExcludedLights) {
-        for (const auto& k : keywords) {
+    for (const auto &keywords : RGBExcludedLights)
+    {
+        for (const auto &k : keywords)
+        {
             logger::info("{}", k);
         }
         logger::info("");
     }
 }
 
-inline void ReadMasterListAndFillExcludes() {
+inline void ReadMasterListAndFillExcludes()
+{
     std::string path = "Data\\SKSE\\Plugins\\Masterlist.ini";
-    if (!std::filesystem::exists(path)) {
+    if (!std::filesystem::exists(path))
+    {
         logger::warn("INI file not found: {}", path);
         return;
     }
     std::ifstream iniFile(path);
-    if (!iniFile.is_open()) {
+    if (!iniFile.is_open())
+    {
         logger::warn("Failed to open INI file: {}", path);
         return;
     }
     std::string line;
     int section = 0; // 0=skip, 1=exact excludes, 2=partial excludes
-    while (std::getline(iniFile, line)) {
+    while (std::getline(iniFile, line))
+    {
         line = trim(line);
         if (line.empty())
             continue;
-        if (line.starts_with(";")) {
-            if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos) {
+        if (line.starts_with(";"))
+        {
+            if (line.find("EXCLUDE SPECIFIC NODES BY NAME") != std::string::npos)
+            {
                 section = 1;
             }
-            else if (line.find("EXCLUDE PARTIAL NODES BY NAME") != std::string::npos) {
+            else if (line.find("EXCLUDE PARTIAL NODES BY NAME") != std::string::npos)
+            {
                 section = 2;
             }
             else if (line.find("EXCLUDE BY EDITOR ID") != std::string::npos ||
-                line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos ||
-                line.find("EXCLUDE LIGHT FROM RGB") != std::string::npos) {
+                     line.find("EXCLUDE BY CELL EDITOR ID") != std::string::npos ||
+                     line.find("EXCLUDE LIGHT FROM RGB") != std::string::npos)
+            {
                 section = 0; // stop processing excludes
             }
             continue;
         }
-        if (section == 1) {
+        if (section == 1)
+        {
             toLower(line);
             exclusionList.push_back(line);
             logger::info("Added exact exclude: '{}'", line);
         }
-        else if (section == 2) {
+        else if (section == 2)
+        {
             toLower(line);
             exclusionListPartialMatch.push_back(line);
             logger::info("Added partial exclude: '{}'", line);
@@ -474,44 +694,23 @@ inline void ReadMasterListAndFillExcludes() {
     iniFile.close();
 }
 
-/* inline void Initialize() {
-     logger::info("loading forms");
-    auto dataHandler = RE::TESDataHandler::GetSingleton(); // single instance
-
-    keywordForswornCamp = dataHandler->LookupForm<RE::BGSKeyword>(0x000130EE, "Skyrim.esm");
-    if (!keywordForswornCamp) {
-        logger::info("BGSKeyword LocTypeForswornCamp (0x000130EE) not found");
-    }
-
-    keywordVampireLair = dataHandler->LookupForm<RE::BGSKeyword>(0x000130EB, "Skyrim.esm");
-    if (!keywordVampireLair) {
-        logger::info("BGSKeyword LocTypeVampireLair (0x000130EB) not found");
-    }
-
-    keywordDungeon = dataHandler->LookupForm<RE::BGSKeyword>(0x000130DB, "Skyrim.esm");
-    if (!keywordDungeon) {
-        logger::info("BGSKeyword LocTypeDungeon (0x000130DB) not found");
-    }
-
-    keywordDragonPriestLair = dataHandler->LookupForm<RE::BGSKeyword>(0x000130E1, "Skyrim.esm");
-    if (!keywordDragonPriestLair) {
-        logger::info("BGSKeyword LocTypeDragonPriestLair (0x000130E1) not found");
-    }
-} */
-
-inline bool IsInSoulCairnOrApocrypha(RE::PlayerCharacter* player) {
-    if (!player) {
+inline bool IsInSoulCairnOrApocrypha(RE::PlayerCharacter *player)
+{
+    if (!player)
+    {
         return false;
     }
     auto worldspace = player->GetWorldspace();
-    if (!worldspace) {
+    if (!worldspace)
+    {
         // logger::info("worldSpace not valid cant get location");
-        return false;  // Not in a worldspace (probably in an interior cell)
+        return false; // Not in a worldspace (probably in an interior cell)
     }
 
     // logger::info("current worldspace = {}", worldspace->GetFormID());
 
-    if (worldspace->GetFormID() == apocryphaFormID || worldspace->GetFormID() == soulCairnFormID) {
+    if (worldspace->GetFormID() == apocryphaFormID || worldspace->GetFormID() == soulCairnFormID)
+    {
         //  logger::info("is in soul cairn or apocrypha");
         return true;
     }
@@ -519,38 +718,44 @@ inline bool IsInSoulCairnOrApocrypha(RE::PlayerCharacter* player) {
     return false;
 }
 
-//clones a ni node from a nif template on disk
-inline RE::NiPointer<RE::NiNode> cloneNiNode(const std::string& templatePath) {
+// clones a ni node from a nif template on disk
+inline RE::NiPointer<RE::NiNode> cloneNiNode(const std::string &templatePath)
+{
     RE::NiPointer<RE::NiNode> loaded;
     auto args = RE::BSModelDB::DBTraits::ArgsType();
 
     auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-    if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+    if (result != RE::BSResource::ErrorCode::kNone || !loaded)
+    {
         logger::warn("Could not find template {}", templatePath);
         return nullptr;
     }
 
     auto fadeNode = loaded->AsNode();
-    if (!fadeNode || fadeNode->GetChildren().empty() || !fadeNode->GetChildren()[0]) {
+    if (!fadeNode || fadeNode->GetChildren().empty() || !fadeNode->GetChildren()[0])
+    {
         logger::warn("Template Fade node is missing, has no children, or first child is null");
         return nullptr;
     }
 
     auto firstChild = fadeNode->GetChildren()[0]->AsNode();
-    if (!firstChild) {
+    if (!firstChild)
+    {
         logger::info("cloneNiNode: first child cast as node failed");
         return nullptr;
     }
 
     RE::NiCloningProcess cloningProcess;
     auto cloneBase = firstChild->CreateClone(cloningProcess);
-    if (!cloneBase) {
+    if (!cloneBase)
+    {
         logger::error("Failed to clone template node!");
         return nullptr;
     }
 
     auto yourGlowNodePrototype = cloneBase->AsNode();
-    if (!yourGlowNodePrototype) {
+    if (!yourGlowNodePrototype)
+    {
         logger::error("Cloned object is not a NiNode!");
         return nullptr;
     }
@@ -559,8 +764,7 @@ inline RE::NiPointer<RE::NiNode> cloneNiNode(const std::string& templatePath) {
     return RE::NiPointer<RE::NiNode>(yourGlowNodePrototype);
 }
 
-
-// sort out what arrays of meshes get what template node. NOTUSED I failed in cloning a clone to use as a template rather then load from disk to save perf. clones came out bugged and shining blue light 
+// sort out what arrays of meshes get what template node. NOTUSED I failed in cloning a clone to use as a template rather then load from disk to save perf. clones came out bugged and shining blue light
 /*inline void assignClonedNodes() {
     logger::info("assigning cloned nodes... total groups: {}", baseMeshesAndNiNodeToAttach.size());
 
@@ -587,20 +791,22 @@ inline RE::NiPointer<RE::NiNode> cloneNiNode(const std::string& templatePath) {
 
     logger::info("Finished assignClonedNodes");
 }*/
-inline void glowOrbRemover(RE::NiNode* node)
+inline void glowOrbRemover(RE::NiNode *node)
 {
     if (!node)
         return;
 
     // Copy raw pointers to avoid iterator invalidation
-    std::vector<RE::NiAVObject*> childrenCopy;
+    std::vector<RE::NiAVObject *> childrenCopy;
     childrenCopy.reserve(node->GetChildren().size());
 
-    for (auto& c : node->GetChildren()) {
+    for (auto &c : node->GetChildren())
+    {
         childrenCopy.push_back(c.get());
     }
 
-    for (auto& child : childrenCopy) {
+    for (auto &child : childrenCopy)
+    {
         if (!child)
             continue;
 
@@ -611,7 +817,8 @@ inline void glowOrbRemover(RE::NiNode* node)
         std::string name = childAsNode->name.c_str();
         toLower(name);
 
-        if (name.find("glow") != std::string::npos) {
+        if (name.find("glow") != std::string::npos)
+        {
             childAsNode->SetAppCulled(true);
             continue;
         }
@@ -621,19 +828,26 @@ inline void glowOrbRemover(RE::NiNode* node)
     }
 }
 
-inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
-    if (nodeName == "MPSCandleFlame01.nif" && removeFakeGlowOrbs) {
+inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode *root)
+{
+    if (nodeName == "MPSCandleFlame01.nif" && removeFakeGlowOrbs)
+    {
 
         if (!root)
             return;
 
         // this is to remove glow orbs from Master particle system candles
-        if (auto* flameNode = root->GetObjectByName("mpscandleflame01")) {
-            if (auto* flameNiNode = flameNode->AsNode()) {
+        if (auto *flameNode = root->GetObjectByName("mpscandleflame01"))
+        {
+            if (auto *flameNiNode = flameNode->AsNode())
+            {
 
-                if (!flameNiNode) return;
-                if (auto* glowEmitter = flameNiNode->GetObjectByName("CandleGlow01-Emitter")) {
-                    if (auto* emitterNode = glowEmitter->AsNode()) {
+                if (!flameNiNode)
+                    return;
+                if (auto *glowEmitter = flameNiNode->GetObjectByName("CandleGlow01-Emitter"))
+                {
+                    if (auto *emitterNode = glowEmitter->AsNode())
+                    {
                         emitterNode->SetAppCulled(true);
                         logger::info("Culled CandleGlow01 emitter safely (no iteration)");
                         return;
@@ -644,26 +858,30 @@ inline void cullMPSGlow(RE::BSFixedString nodeName, RE::NiNode* root) {
     }
 }
 
-
-inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE::NiNode* root)
+inline bool isExclude(const RE::BSFixedString &nodeName, const char *nifPath, RE::NiNode *root)
 {
     // Exact matches in exclusion list
-    for (const auto& exclude : exclusionList) {
-        if (nodeName == exclude) {
+    for (const auto &exclude : exclusionList)
+    {
+        if (nodeName == exclude)
+        {
             logger::debug("isExclude: '{}' matched exact exclude '{}'", nodeName.c_str(), exclude);
             return true;
         }
     }
 
     // Partial matches in exclusion list
-    for (const auto& exclude : exclusionListPartialMatch) {
-        if (nodeName.contains(exclude)) {
+    for (const auto &exclude : exclusionListPartialMatch)
+    {
+        if (nodeName.contains(exclude))
+        {
             logger::debug("isExclude: '{}' matched partial exclude '{}'", nodeName.c_str(), exclude);
             return true;
         }
     }
 
-    if (!nifPath) {
+    if (!nifPath)
+    {
         logger::debug("isExclude: '{}' has null nifPath", nodeName.c_str());
         return false;
     }
@@ -672,7 +890,8 @@ inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE
     toLower(path);
 
     // Some modded torches name "off" variants incorrectly
-    if (path.find("off") != std::string::npos) {
+    if (path.find("off") != std::string::npos)
+    {
         logger::debug("isExclude: '{}' excluded due to 'off' in path '{}'", nodeName.c_str(), path);
         return true;
     }
@@ -681,11 +900,14 @@ inline bool isExclude(const RE::BSFixedString& nodeName, const char* nifPath, RE
 }
 
 // finds if a incoming node name matches any of our partial search keywords
-inline RE::BSFixedString matchedKeyword(const RE::BSFixedString& nodeName)
+inline RE::BSFixedString matchedKeyword(const RE::BSFixedString &nodeName, const char *nifPath)
 {
+    const std::string meshName = normalizedMeshName(nifPath);
 
-    for (const auto& keyword : priorityList) {
-        if (nodeName.contains(keyword)) {
+    for (const auto &keyword : priorityList)
+    {
+        if ((!meshName.empty() && meshName.find(keyword.c_str()) != std::string::npos) || nodeName.contains(keyword))
+        {
             return keyword;
         }
     }
@@ -693,45 +915,38 @@ inline RE::BSFixedString matchedKeyword(const RE::BSFixedString& nodeName)
     return {};
 }
 
-//we clone and store ni nodes in a bank on startup to help with performance 
-inline RE::NiPointer<RE::NiNode> getNextNodeFromBank(const RE::BSFixedString& keyword)
+inline RE::NiPointer<RE::NiNode> cloneTemplateForKeyword(const RE::BSFixedString &keyword)
 {
-    auto it = keywordNodeBank.find(keyword);
-
-    if (it == keywordNodeBank.end() || it->second.empty()) {
-        logger::warn("getNextNodeFromBank: '{}' has no nodes available", keyword);
+    auto templateIt = keywordTemplateMap.find(keyword);
+    if (templateIt == keywordTemplateMap.end())
+    {
+        logger::warn("cloneTemplateForKeyword: '{}' has no configured template", keyword);
         return nullptr;
     }
 
-    auto& bank = it->second; // keywords nodebank array
-
-    // static here means initialised once and map contents survive each call (personal note)
-    static std::unordered_map<RE::BSFixedString, std::size_t> counters;
-    auto& count = counters[keyword];                                 // index for the next node to use in bank
-
-    if (count >= bank.size())
-        count = 0; // resets bank to 0 if we passed the limit (likely fine to recycle the nodes)
-
-    RE::NiPointer<RE::NiNode> node = bank[count];
-
-    if (!node) {
-      //  logger::warn("getNextNodeFromBank: '{}' node index {} is null", keyword.c_str(), count);
-        return nullptr;
-    }
-
-    count++;
-
-    return node;
+    // A NiAVObject can only have one parent, so every runtime attachment needs its own clone.
+    const std::string templatePath = "Meshes\\MLO\\Templates\\" + templateIt->second;
+    return cloneNiNode(templatePath);
 }
 
+inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString &nodeName, RE::NiPointer<RE::NiNode> &a_root, const char *nifPath)
+{
+    const std::string meshName = normalizedMeshName(nifPath);
+    auto it = baseMeshesAndTemplateToAttach.end();
+    if (!meshName.empty())
+    {
+        it = baseMeshesAndTemplateToAttach.find(RE::BSFixedString(meshName));
+    }
+    if (it == baseMeshesAndTemplateToAttach.end())
+    {
+        it = baseMeshesAndTemplateToAttach.find(nodeName);
+    }
 
-inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString& nodeName, RE::NiPointer<RE::NiNode>& a_root, const char* nifPath) {
+    if (it != baseMeshesAndTemplateToAttach.end())
+    {
 
-    auto it = baseMeshesAndTemplateToAttach.find(nodeName);
-
-    if (it != baseMeshesAndTemplateToAttach.end()) {
-
-        if (isExclude(nodeName, nifPath, a_root.get())) {
+        if (isExclude(nodeName, nifPath, a_root.get()))
+        {
             logger::debug("cloneAttach: '{}' skipped due to exclusion", nodeName.c_str());
             return true;
         }
@@ -739,16 +954,27 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString& nodeNa
         std::string fullPath = "Meshes\\MLO\\Templates\\" + it->second;
 
         auto nodeClone = cloneNiNode(fullPath);
-        if (!nodeClone) {
+        if (!nodeClone)
+        {
             logger::warn("cloneAttach: Failed to clone template '{}' for '{}'", fullPath, nodeName.c_str());
             return false;
         }
 
         logger::debug("cloneAttach: Attaching template '{}' to '{}'", fullPath, nodeName.c_str());
 
-        a_root->AttachChild(nodeClone.get());
+        std::string normalizedNodeName = nodeName.c_str();
+        toLower(normalizedNodeName);
+        auto attachTarget = particleLightAttachmentTarget(a_root.get(), normalizedNodeName, nifPath);
+        if (!attachTarget)
+        {
+            logger::warn("cloneAttach: Refusing to attach '{}' to bowl or brazier '{}' without a fire or ember branch", fullPath, nodeName.c_str());
+            return true;
+        }
+        attachTarget->AttachChild(nodeClone.get());
+        logger::info("Attached specific particle-light template '{}' to '{}'", fullPath, attachTarget->name.c_str());
 
-        if (removeFakeGlowOrbs) {
+        if (removeFakeGlowOrbs)
+        {
             logger::debug("cloneAttach: Running glowOrbRemover for '{}'", nodeName.c_str());
             glowOrbRemover(a_root.get());
         }
@@ -759,44 +985,18 @@ inline bool cloneAndAttachNodesForSpecificMeshes(const RE::BSFixedString& nodeNa
     return false;
 }
 
-// on startup store a bunch of cloned nodes so we dont have to clone from disk during gameplay
-inline void assignClonedNodesToBank() {
-    logger::info("Assigning cloned nodes... total groups: {}", keywordNodeBank.size());
-
-    const std::string prefix = "Meshes\\MLO\\Templates\\";
-
-    for (auto& [keyword, bankedNodes] : keywordNodeBank) {
-        auto templateIt = keywordTemplateMap.find(keyword);
-        if (templateIt == keywordTemplateMap.end()) {
-            logger::warn("AssignClonedNodesToBank: keyword without a template found: {}", keyword);
-            continue; // no template for this keyword
-        }
-        const std::string templatePath = prefix + templateIt->second;
-        const size_t maxNodes = (keyword == "candle") ? 75 : 25;
-
-        for (size_t i = 0; i < maxNodes; ++i) {
-            auto clonedNode = cloneNiNode(templatePath);
-            if (clonedNode) {
-                bankedNodes.push_back(clonedNode);
-            }
-            else {
-                logger::warn("Skipping node {} for keyword '{}', clone failed", i, keyword);
-            }
-        }
-    }
-
-    logger::info("Finished assignClonedNodes");
-}
-
 // stole this from somewhere Po3 mabye
 
 template <class T, std::size_t size = 5>
-inline void write_thunk_call(std::uintptr_t a_src) {
-    auto& trampoline = SKSE::GetTrampoline();
-    if constexpr (size == 6) {
-        T::func = *(uintptr_t*)trampoline.write_call<6>(a_src, T::thunk);
+inline void write_thunk_call(std::uintptr_t a_src)
+{
+    auto &trampoline = SKSE::GetTrampoline();
+    if constexpr (size == 6)
+    {
+        T::func = *(uintptr_t *)trampoline.write_call<6>(a_src, T::thunk);
     }
-    else {
+    else
+    {
         T::func = trampoline.write_call<size>(a_src, T::thunk);
     }
 }
@@ -804,21 +1004,23 @@ inline void write_thunk_call(std::uintptr_t a_src) {
 // checs if fake lights should be disabled by checking some user settings. and excluding dynamicform lights
 // or whitelisted lights by checking the plugin name or carryable or shadowcasters lol
 
-inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* ref, std::string modName)
+inline bool should_disable_light(RE::TESObjectLIGH *light, RE::TESObjectREFR *ref, std::string modName)
 {
-    if (!ref || !light || ref->IsDynamicForm() || !disableLights) {
+    if (!ref || !light || ref->IsDynamicForm() || !disableLights)
+    {
         return false;
     }
 
     auto player = RE::PlayerCharacter::GetSingleton();
 
-    if (IsInSoulCairnOrApocrypha(player)) {
+    if (IsInSoulCairnOrApocrypha(player))
+    {
         logger::info("player is in apocrypha or soul cairn so we should not disable light");
         return false;
     }
     if (disableShadowCasters == false &&
         light->data.flags.any(RE::TES_LIGHT_FLAGS::kOmniShadow,
-            RE::TES_LIGHT_FLAGS::kHemiShadow, RE::TES_LIGHT_FLAGS::kSpotShadow))
+                              RE::TES_LIGHT_FLAGS::kHemiShadow, RE::TES_LIGHT_FLAGS::kSpotShadow))
     {
         return false;
     }
@@ -829,8 +1031,10 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         return false;
     }
 
-    for (const auto& whitelistedMod : whitelist) {
-        if (modName.find(whitelistedMod) != std::string::npos) {
+    for (const auto &whitelistedMod : whitelist)
+    {
+        if (modName.find(whitelistedMod) != std::string::npos)
+        {
             return false;
         }
     }
@@ -903,15 +1107,20 @@ inline bool should_disable_light(RE::TESObjectLIGH* light, RE::TESObjectREFR* re
         }
     } */
 
-inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
-    if (nodeName == "MissiveBoard_new.nif") {
+inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode *root)
+{
+    if (nodeName == "MissiveBoard_new.nif")
+    {
         if (!root)
             return false;
 
-        if (auto* candleNode = root->GetObjectByName("CandleLanternWithCandle")) {
-            if (auto* candleNiNode = candleNode->AsNode()) {
-                RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-                if (nodePtr) {
+        if (auto *candleNode = root->GetObjectByName("CandleLanternWithCandle"))
+        {
+            if (auto *candleNiNode = candleNode->AsNode())
+            {
+                RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword("candle");
+                if (nodePtr)
+                {
                     candleNiNode->AttachChild(nodePtr.get());
                     return true;
                 }
@@ -921,7 +1130,8 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         return false;
     }
 
-    if (nodeName.contains("DiverseMissiveBoardRuins")) {
+    if (nodeName.contains("DiverseMissiveBoardRuins"))
+    {
         logger::debug("MissiveBoard: matched RUINS variant for node '{}'", nodeName);
 
         std::string templatePath = "Meshes\\MLO\\Templates\\DiverseMissiveBoardRuins_NOT Animated.nif";
@@ -931,13 +1141,15 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         auto args = RE::BSModelDB::DBTraits::ArgsType();
 
         auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+        if (result != RE::BSResource::ErrorCode::kNone || !loaded)
+        {
             logger::warn("MissiveBoard: Failed to load NIF file {}", templatePath);
             return false;
         }
 
         auto fadeNode = loaded->AsNode();
-        if (!fadeNode) {
+        if (!fadeNode)
+        {
             logger::warn("MissiveBoard: Loaded NIF has no root node: {}", templatePath);
             return false;
         }
@@ -945,20 +1157,25 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         RE::NiCloningProcess cloneProc;
         std::size_t attachedCount = 0;
 
-        for (const auto& child : fadeNode->GetChildren()) {
-            if (!child) {
+        for (const auto &child : fadeNode->GetChildren())
+        {
+            if (!child)
+            {
                 logger::debug("MissiveBoard: Encountered null child, skipping");
                 continue;
             }
 
             auto childAsNode = child->AsNode();
-            if (childAsNode) {
+            if (childAsNode)
+            {
                 auto clone = childAsNode->CreateClone(cloneProc);
-                if (clone) {
+                if (clone)
+                {
                     root->AttachChild(clone->AsNode());
                     attachedCount++;
                 }
-                else {
+                else
+                {
                     logger::debug("MissiveBoard: Failed to clone a child node");
                 }
             }
@@ -968,7 +1185,8 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         return attachedCount > 0;
     }
 
-    if (nodeName.contains("DiverseMissiveBoard")) {
+    if (nodeName.contains("DiverseMissiveBoard"))
+    {
         logger::debug("MissiveBoard: matched DEFAULT variant for node '{}'", nodeName);
 
         std::string templatePath = "Meshes\\MLO\\Templates\\DiverseMissiveBoard_NOT Animated.nif";
@@ -978,13 +1196,15 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         auto args = RE::BSModelDB::DBTraits::ArgsType();
 
         auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-        if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+        if (result != RE::BSResource::ErrorCode::kNone || !loaded)
+        {
             logger::warn("MissiveBoard: Failed to load NIF file {}", templatePath);
             return false;
         }
 
         auto fadeNode = loaded->AsNode();
-        if (!fadeNode) {
+        if (!fadeNode)
+        {
             logger::warn("MissiveBoard: Loaded NIF has no root node: {}", templatePath);
             return false;
         }
@@ -992,20 +1212,25 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
         RE::NiCloningProcess cloneProc;
         std::size_t attachedCount = 0;
 
-        for (const auto& child : fadeNode->GetChildren()) {
-            if (!child) {
+        for (const auto &child : fadeNode->GetChildren())
+        {
+            if (!child)
+            {
                 logger::debug("MissiveBoard: Encountered null child, skipping");
                 continue;
             }
 
             auto childAsNode = child->AsNode();
-            if (childAsNode) {
+            if (childAsNode)
+            {
                 auto clone = childAsNode->CreateClone(cloneProc);
-                if (clone) {
+                if (clone)
+                {
                     root->AttachChild(clone->AsNode());
                     attachedCount++;
                 }
-                else {
+                else
+                {
                     logger::debug("MissiveBoard: Failed to clone a child node");
                 }
             }
@@ -1018,63 +1243,59 @@ inline bool missivesPatch(RE::BSFixedString nodeName, RE::NiNode* root) {
     return false;
 }
 
-// torches need special placement of light so they dont light up when not equipped. 
-inline bool TorchHandler(const std::string& nodeName, RE::NiPointer<RE::NiNode>& a_root)
-
+// torches need special placement of light so they dont light up when not equipped.
+inline bool TorchHandler(const std::string &nodeName, const char *nifPath, RE::NiPointer<RE::NiNode> &a_root)
 {
-    if (nodeName == "torch") {
-        RE::NiNode* attachLight = nullptr;
-        RE::NiNode* torchFire = nullptr;
-
-
-        auto ui = RE::UI::GetSingleton();
-
-        if (ui && ui->IsMenuOpen("InventoryMenu")) {
-            //logger::info("Inventory menu is open, skipping PostCreate processing"); // do we even need that? 
-            return true;
-        }
-
-        // must null check everything or crash city. 
-
-        for (auto& child : a_root->GetChildren()) {
-            if (!child) continue; // 
-            auto childNode = child->AsNode();
-            if (childNode && childNode->name == "TorchFire") {
-                torchFire = childNode;
-                break;
-            }
-        }
-
-        if (torchFire) {
-            for (auto& child : torchFire->GetChildren()) {
-                if (!child) continue;
-                auto childNode = child->AsNode();
-                if (childNode && childNode->name == "AttachLight") {
-                    attachLight = childNode;
-                    break;
-                }
-            }
-        }
-
-        if (attachLight) {
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("torch");
-            if (nodePtr) {
-                attachLight->AttachChild(nodePtr.get());
-                // logger::info("attached light to torch at specific spot {}", nodeName);
-                return true;
-            }
-        }
-        else {
-            logger::warn("hand held torch light placement failed for {}", nodeName);
-        }
+    if (nodeName != "torch" && normalizedMeshName(nifPath) != "torch")
+    {
+        return false;
     }
-    return false;
+
+    auto torchFire = findNodeContaining(a_root.get(), "torchfire");
+    if (!torchFire)
+    {
+        logger::warn("Hand-held torch '{}' has no TorchFire branch; particle light was not attached", nodeName);
+        return true;
+    }
+
+    RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword("torch");
+    if (!nodePtr)
+    {
+        logger::warn("Hand-held torch particle-light template is missing");
+        return true;
+    }
+
+    torchFire->AttachChild(nodePtr.get());
+    logger::info("Attached hand-held torch particle light directly to TorchFire");
+    return true;
 }
 
-inline bool applyCorrectNordicHallTemplate(std::string nodeName, RE::NiPointer<RE::NiNode>& a_root)
+inline bool attachKeywordParticleLight(const RE::BSFixedString &keyword, const std::string &nodeName, const char *nifPath, RE::NiPointer<RE::NiNode> &root)
+{
+    auto attachTarget = particleLightAttachmentTarget(root.get(), nodeName, nifPath);
+    if (!attachTarget)
+    {
+        logger::warn("Refusing keyword '{}' particle-light attachment to bowl or brazier '{}' without a fire or ember branch", keyword, nodeName);
+        return true;
+    }
+
+    RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword(keyword);
+    if (!nodePtr)
+    {
+        logger::warn("Keyword '{}' particle-light template is missing", keyword);
+        return true;
+    }
+
+    attachTarget->AttachChild(nodePtr.get());
+    logger::info("Attached '{}' particle light to '{}'", keyword, attachTarget->name.c_str());
+    return true;
+}
+
+inline bool applyCorrectNordicHallTemplate(std::string nodeName, RE::NiPointer<RE::NiNode> &a_root)
 {
     auto it = nordicHallMeshesAndTemplates.find(nodeName);
-    if (it == nordicHallMeshesAndTemplates.end() || it->second.empty()) {
+    if (it == nordicHallMeshesAndTemplates.end() || it->second.empty())
+    {
         return false;
     }
 
@@ -1084,28 +1305,34 @@ inline bool applyCorrectNordicHallTemplate(std::string nodeName, RE::NiPointer<R
     auto args = RE::BSModelDB::DBTraits::ArgsType();
 
     auto result = RE::BSModelDB::Demand(templatePath.c_str(), loaded, args);
-    if (result != RE::BSResource::ErrorCode::kNone || !loaded) {
+    if (result != RE::BSResource::ErrorCode::kNone || !loaded)
+    {
         logger::warn("Failed to load NIF file {}", templatePath);
         return false;
     }
 
     auto fadeNode = loaded->AsNode();
-    if (!fadeNode) {
+    if (!fadeNode)
+    {
         logger::warn("Loaded NIF has no root node: {}", templatePath);
         return false;
     }
 
     RE::NiCloningProcess cloneProc;
 
-    for (const auto& child : fadeNode->GetChildren()) {
-        if (!child) {
+    for (const auto &child : fadeNode->GetChildren())
+    {
+        if (!child)
+        {
             return true;
         }
 
         auto childAsNode = child->AsNode();
-        if (childAsNode) {
+        if (childAsNode)
+        {
             auto clone = childAsNode->CreateClone(cloneProc);
-            if (clone) {
+            if (clone)
+            {
                 a_root->AttachChild(clone->AsNode());
             }
         }
@@ -1113,13 +1340,14 @@ inline bool applyCorrectNordicHallTemplate(std::string nodeName, RE::NiPointer<R
     return true;
 }
 
-// some nodes are called scene root this is to take care of them. 
-inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_root, std::string nodeName)
+// some nodes are called scene root this is to take care of them.
+inline bool handleSceneRoot(const char *nifPath, RE::NiPointer<RE::NiNode> &a_root, std::string nodeName)
 {
     if (nodeName.find("scene") == std::string::npos)
         return false;
 
-    if (!nifPath) {
+    if (!nifPath)
+    {
         return true;
     }
 
@@ -1127,7 +1355,7 @@ inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_ro
 
     toLower(path);
 
-   // logger::info("scene root node detected, checking path: {}", path);
+    // logger::info("scene root node detected, checking path: {}", path);
 
     std::string bankType;
 
@@ -1135,7 +1363,6 @@ inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_ro
     {
         bankType = "candlehornfloor01";
     }
-
 
     else if (path.find("candle") != std::string::npos)
     {
@@ -1148,9 +1375,10 @@ inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_ro
         return true; // not a relevant mesh
     }
 
-    RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank(bankType);
+    RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword(bankType);
 
-    if (nodePtr) {
+    if (nodePtr)
+    {
         if (removeFakeGlowOrbs)
             glowOrbRemover(a_root.get());
         a_root->AttachChild(nodePtr.get());
@@ -1164,7 +1392,7 @@ inline bool handleSceneRoot(const char* nifPath, RE::NiPointer<RE::NiNode>& a_ro
     }
 }
 // some nodes are called dummy this is to take care of them.
-inline void dummyHandler(RE::NiNode* root,const RE::BSFixedString& nodeName)
+inline void dummyHandler(RE::NiNode *root, const RE::BSFixedString &nodeName)
 {
     // Only operate on nodes whose own name contains "dummy"
 
@@ -1175,21 +1403,26 @@ inline void dummyHandler(RE::NiNode* root,const RE::BSFixedString& nodeName)
         glowOrbRemover(root);
 
     // Search children for a NiNode whose name contains "candle"
-    for (auto& child : root->GetChildren()) {
-        if (!child) continue;
+    for (auto &child : root->GetChildren())
+    {
+        if (!child)
+            continue;
 
         auto childAsNode = child->AsNode();
-        if (!childAsNode) {
-        //    logger::info("dummy handler: child of dummy node could not be cast AsNode()");
+        if (!childAsNode)
+        {
+            //    logger::info("dummy handler: child of dummy node could not be cast AsNode()");
             continue;
         }
 
         std::string childName = childAsNode->name.c_str();
         toLower(childName);
 
-        if (childName.find("chandel") != std::string::npos) { // skyrim spells chandelier wrong sometimes so "chandel" (for example sometimes chandelier has 2 'L's in its name, thanks bethesda)
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("chandel");
-            if (!nodePtr) {
+        if (childName.find("chandel") != std::string::npos)
+        { // skyrim spells chandelier wrong sometimes so "chandel" (for example sometimes chandelier has 2 'L's in its name, thanks bethesda)
+            RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword("chandel");
+            if (!nodePtr)
+            {
                 logger::info("DummyHandler: chandelier node from bank was null");
                 return;
             }
@@ -1197,9 +1430,11 @@ inline void dummyHandler(RE::NiNode* root,const RE::BSFixedString& nodeName)
             return;
         }
 
-        if (childName.find("ruins_floorcandlelampmid") != std::string::npos) {
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("ruinsfloorcandlelampmidon");
-            if (!nodePtr) {
+        if (childName.find("ruins_floorcandlelampmid") != std::string::npos)
+        {
+            RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword("ruinsfloorcandlelampmidon");
+            if (!nodePtr)
+            {
                 logger::info("DummyHandler: ruinsfloorcandlelampmidon node from bank was null");
                 return;
             }
@@ -1207,41 +1442,45 @@ inline void dummyHandler(RE::NiNode* root,const RE::BSFixedString& nodeName)
             return;
         }
 
-        if (childName.find("candle") != std::string::npos) {
-            RE::NiPointer<RE::NiNode> nodePtr = getNextNodeFromBank("candle");
-            if (!nodePtr) {
+        if (childName.find("candle") != std::string::npos)
+        {
+            RE::NiPointer<RE::NiNode> nodePtr = cloneTemplateForKeyword("candle");
+            if (!nodePtr)
+            {
                 logger::info("DummyHandler: candle node from bank was null");
                 return;
             }
             root->AttachChild(nodePtr.get());
             return;
         }
-
     }
 }
 
-inline void DumpFullTree(RE::NiAVObject* obj, int depth = 0)
+inline void DumpFullTree(RE::NiAVObject *obj, int depth = 0)
 {
-    if (!obj) return;
+    if (!obj)
+        return;
 
     std::string indent(depth * 2, ' ');
 
     logger::info("{}- {} [{}]", indent, obj->name.c_str(), obj->GetRTTI() ? obj->GetRTTI()->name : "unknown");
 
     // if geometry, dump alpha + shader via GEOMETRY_RUNTIME_DATA
-    if (auto geom = obj->AsGeometry()) {
-        auto& runtime = geom->GetGeometryRuntimeData();
-        if (runtime.properties[RE::BSGeometry::States::kProperty]) {
-            logger::info("{}  * alphaProperty present", indent);
-        }
-        if (runtime.properties[RE::BSGeometry::States::kEffect]) {
-            logger::info("{}  * shaderProperty present", indent);
-        }
-    }
+    // if (auto geom = obj->AsGeometry()) {
+    //     auto& runtime = geom->GetGeometryRuntimeData();
+    //     if (runtime.properties[RE::BSGeometry::States::kProperty]) {
+    //         logger::info("{}  * alphaProperty present", indent);
+    //     }
+    //     if (runtime.properties[RE::BSGeometry::States::kEffect]) {
+    //         logger::info("{}  * shaderProperty present", indent);
+    //     }
+    // }
 
     // recurse if node
-    if (auto node = obj->AsNode()) {
-        for (auto& child : node->GetChildren()) {
+    if (auto node = obj->AsNode())
+    {
+        for (auto &child : node->GetChildren())
+        {
             DumpFullTree(child.get(), depth + 1);
         }
     }

@@ -34,8 +34,6 @@ std::unordered_map<RE::BSFixedString, std::string>
 
 std::unordered_map<RE::BSFixedString, std::string> keywordTemplateMap = {};
 
-std::unordered_map<RE::BSFixedString, std::vector<RE::NiPointer<RE::NiNode>>> keywordNodeBank = {};
-
 std::vector<std::vector<std::string>> keywordLightGroups;
 
 std::vector<std::vector<std::string>> RGBExcludedLights;

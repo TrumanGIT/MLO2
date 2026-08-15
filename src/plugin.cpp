@@ -7,11 +7,16 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* message)
 
     if (message->type == SKSE::MessagingInterface::kDataLoaded) {
 
-       logger::info("kdata is loaded attempting to initialise and install");
-                 //   Initialize();
-       IniParser();
-                    assignClonedNodesToBank();
-                       dataHasLoaded = true; 
+        logger::info("kdata is loaded attempting to initialise and install");
+        // Initialize();
+        IniParser();
+
+        // We need to create a fresh clone for every attachment. 
+        // Scene nodes are mutable and have a single parent,
+        // so reusing a cached node can reparent it or retain state from a previous owner.
+        // Thus, assignClonedNodesToBank() is removed.
+
+        dataHasLoaded = true;
     }
 }
 
